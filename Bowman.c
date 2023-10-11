@@ -41,10 +41,9 @@ char *readUntil(char del, int fd)
   return chain;
 }
 
+// TODO CHECK IF THE FILE IS CORRECTLY FORMATTED
 Bowman *saveBowman(int fd)
 {
-  // TODO CHECK IF THE FILE IS CORRECTLY FORMATTED
-
   Bowman *bowman = malloc(sizeof(Bowman));
 
   bowman->username = readUntil('\n', fd);
@@ -62,6 +61,7 @@ Bowman *saveBowman(int fd)
   return bowman;
 }
 
+// TODO: Minor issue the command not found output is not the same as the one in the
 void commandInterpreter()
 {
   int bytesRead;
@@ -153,7 +153,7 @@ void commandInterpreter()
             write(1, "Unknown command\n", strlen("Unknown command\n"));
           }
         }
-        else 
+        else
         {
           write(1, "Unknown command\n", strlen("Unknown command\n"));
         }

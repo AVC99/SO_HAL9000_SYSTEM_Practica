@@ -41,6 +41,7 @@ char *readUntil(char del, int fd){
   return chain;
 }
 
+//TODO: Check if the file is correctly formatted
 Poole *savePoole(int fd){
   Poole *poole = malloc(sizeof(Poole));
 
