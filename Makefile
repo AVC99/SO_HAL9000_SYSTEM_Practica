@@ -16,4 +16,4 @@ clean:
 	rm -f *.o
 
 clean_all: clean
-	rm -f main Bowman Poole valgrind.txt
+	rm -f main Bowman Poole valgrind-out.txt
