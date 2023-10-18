@@ -10,7 +10,8 @@
 #include <unistd.h>
 #include <time.h>
 
-typedef struct {
+typedef struct
+{
   char *servername;
   char *folder;
   char *firstIP;
@@ -20,7 +21,8 @@ typedef struct {
 } Poole;
 
 // Read until the delimiter
-char *readUntil(char del, int fd){
+char *readUntil(char del, int fd)
+{
 
   char *chain = malloc(sizeof(char));
   char c;
@@ -41,23 +43,27 @@ char *readUntil(char del, int fd){
   return chain;
 }
 
-//TODO: Check if the file is correctly formatted
-Poole *savePoole(int fd){
-  Poole *poole = malloc(sizeof(Poole));
+// TODO: Check if the file is correctly formatted
+Poole savePoole(int fd)
+{
+  Poole poole;
 
-  poole->servername = readUntil('\n', fd);
-  poole->folder = readUntil('\n', fd);
-  poole->firstIP = readUntil('\n', fd);
-  poole->firstPort = atoi(readUntil('\n', fd));
-  poole->secondIP = readUntil('\n', fd);
-  poole->secondPort = atoi(readUntil('\n', fd));
+  poole.servername = readUntil('\n', fd);
+  poole.folder = readUntil('\n', fd);
+  poole.firstIP = readUntil('\n', fd);
+  char *port = readUntil('\n', fd);
+  poole.firstPort = atoi(port);
+  free(port);
+  poole.secondIP = readUntil('\n', fd);
+  port = readUntil('\n', fd);
+  poole.secondPort = atoi(port);
+  free(port);
 
   return poole;
 }
 
-int main(int argc, char *argv[]){
-
-  Poole *poole = malloc(sizeof(Poole));
+int main(int argc, char *argv[])
+{
 
   // Check if the arguments are provided
   if (argc < 2)
@@ -74,9 +80,14 @@ int main(int argc, char *argv[]){
     return 1;
   }
 
-  poole = savePoole(fd);
+  Poole poole = savePoole(fd);
 
-  free(poole);
+  free(poole.servername);
+  free(poole.folder);
+  free(poole.firstIP);
+  free(poole.secondIP);
+
+  close(fd);
 
   return 0;
 }

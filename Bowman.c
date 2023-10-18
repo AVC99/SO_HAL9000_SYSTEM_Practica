@@ -41,18 +41,20 @@ char *readUntil(char del, int fd)
   return chain;
 }
 
-// TODO CHECK IF THE FILE IS CORRECTLY FORMATTED
-Bowman *saveBowman(int fd)
+// TODO CHECK IF THE FILE IS CORRECTLY FORMATTED// NEED TO FREE THE MEMORY
+Bowman saveBowman(int fd)
 {
-  Bowman *bowman = malloc(sizeof(Bowman));
+  Bowman bowman;
 
-  bowman->username = readUntil('\n', fd);
-  bowman->folder = readUntil('\n', fd);
-  bowman->ip = readUntil('\n', fd);
-  bowman->port = atoi(readUntil('\n', fd));
+  bowman.username = readUntil('\n', fd);
+  bowman.folder = readUntil('\n', fd);
+  bowman.ip = readUntil('\n', fd);
+  char* port = readUntil('\n', fd);
+  bowman.port = atoi(port);
+  free(port);
 
   // check that the username does not contain &
-  if (strchr(bowman->username, '&') != NULL)
+  if (strchr(bowman.username, '&') != NULL)
   {
     write(2, "Error: Invalid username\n", strlen("Error: Invalid username\n"));
     exit(1);
@@ -163,13 +165,11 @@ void commandInterpreter()
         write(1, "ERROR: Please input a valid command.\n", strlen("ERROR: Please input a valid command.\n"));
       }
     }
-
   } while (strcmp(command, "LOGOUT") != 0);
 }
 
 int main(int argc, char *argv[])
 {
-  Bowman *bowman = malloc(sizeof(Bowman));
   char *buffer;
 
   // Check if the arguments are provided
@@ -187,15 +187,22 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  bowman = saveBowman(fd);
+  Bowman bowman = saveBowman(fd);
 
-  asprintf(&buffer, "%s user initialized\n", bowman->username);
+  asprintf(&buffer, "%s user initialized\n", bowman.username);
   write(1, buffer, strlen(buffer));
 
   commandInterpreter();
 
+  
   free(buffer);
-  free(bowman);
+
+  free(bowman.username);
+  free(bowman.folder);
+  free(bowman.ip);
+  
+
+  close(fd);
 
   return 0;
 }
