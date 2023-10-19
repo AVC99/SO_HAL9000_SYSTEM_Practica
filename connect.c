@@ -10,9 +10,6 @@
 #include <unistd.h>
 #include <time.h>
 
-// I don't know if we need a main file or not
-int main (){
-
-  write(1, "IDK if we need a main file\n", 28);
-  return 0;
+void connect(){
+  write(1, "CONNECT\n", strlen("CONNECT\n"));
 }

@@ -1,4 +1,6 @@
 #define _GNU_SOURCE
+#include "connect.h"
+
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <signal.h>
@@ -49,7 +51,7 @@ Bowman saveBowman(int fd)
   bowman.username = readUntil('\n', fd);
   bowman.folder = readUntil('\n', fd);
   bowman.ip = readUntil('\n', fd);
-  char* port = readUntil('\n', fd);
+  char *port = readUntil('\n', fd);
   bowman.port = atoi(port);
   free(port);
 
@@ -89,13 +91,13 @@ void commandInterpreter()
     // CHECK THE COMMAND can not use SWITCH because it does not work with strings :(
     if (strcmp(command, "CONNECT") == 0)
     {
-      write(1, "CONNECT\n", strlen("CONNECT\n"));
+      connect();
     }
     else if (strcmp(command, "LOGOUT") == 0)
     {
       write(1, "THANKS FOR USING HAL 9000, see you soon, music lover!\n", strlen("THANKS FOR USING HAL 9000, see you soon, music lover!\n"));
     }
-    else
+    else // IF THE COMMAND HAS MORE THAN ONE WORD
     {
       char *token = strtok(command, " ");
 
@@ -152,7 +154,7 @@ void commandInterpreter()
           }
           else
           {
-            write(1, "Unknown command\n", strlen("Unknown command\n"));
+            write(1, "Error: Missing arguments\n", strlen("Error: Missing arguments\n"));
           }
         }
         else
@@ -194,13 +196,11 @@ int main(int argc, char *argv[])
 
   commandInterpreter();
 
-  
   free(buffer);
 
   free(bowman.username);
   free(bowman.folder);
   free(bowman.ip);
-  
 
   close(fd);
 

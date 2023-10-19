@@ -1,2 +1,9 @@
+#IGNORE ALL 
+*
+#UNIGNORE ALL WITH EXTENSIONS
+!*.*
+#UNIGNORE DIRECTORIES 
+!*/
+
 *.pdf
 *.vscode
