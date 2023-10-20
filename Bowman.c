@@ -89,11 +89,11 @@ void commandInterpreter()
     }
 
     // CHECK THE COMMAND can not use SWITCH because it does not work with strings :(
-    if (strcmp(command, "CONNECT") == 0)
+    if (strcasecmp(command, "CONNECT") == 0)
     {
       connect();
     }
-    else if (strcmp(command, "LOGOUT") == 0)
+    else if (strcasecmp(command, "LOGOUT") == 0)
     {
       write(1, "THANKS FOR USING HAL 9000, see you soon, music lover!\n", strlen("THANKS FOR USING HAL 9000, see you soon, music lover!\n"));
     }
@@ -103,13 +103,13 @@ void commandInterpreter()
 
       if (token != NULL)
       {
-        if (strcmp(token, "DOWNLOAD") == 0)
+        if (strcasecmp(token, "DOWNLOAD") == 0)
         {
-          token = strtok(NULL, " ");
-          if (token != NULL)
+          char *filename = strtok(NULL, " ");
+          if (filename != NULL && strtok(NULL, " ") == NULL)
           {
             write(1, "DOWNLOAD ", strlen("DOWNLOAD "));
-            write(1, token, strlen(token));
+            write(1, filename, strlen(filename));
             write(1, "\n", strlen("\n"));
           }
           else
@@ -117,14 +117,14 @@ void commandInterpreter()
             write(1, "Error: Missing arguments\n", strlen("Error: Missing arguments\n"));
           }
         }
-        else if (strcmp(token, "LIST") == 0)
+        else if (strcasecmp(token, "LIST") == 0)
         {
           token = strtok(NULL, " ");
-          if (token != NULL && strcmp(token, "SONGS") == 0)
+          if (token != NULL && strcasecmp(token, "SONGS") == 0)
           {
             write(1, "LIST SONGS\n", strlen("LIST SONGS\n"));
           }
-          else if (token != NULL && strcmp(token, "PLAYLISTS") == 0)
+          else if (token != NULL && strcasecmp(token, "PLAYLISTS") == 0)
           {
             write(1, "LIST PLAYLISTS\n", strlen("LIST PLAYLISTS\n"));
           }
@@ -133,10 +133,10 @@ void commandInterpreter()
             write(1, "Error: Missing arguments\n", strlen("Error: Missing arguments\n"));
           }
         }
-        else if (strcmp(token, "CHECK") == 0)
+        else if (strcasecmp(token, "CHECK") == 0)
         {
           token = strtok(NULL, " ");
-          if (token != NULL && strcmp(token, "DOWNLOADS") == 0)
+          if (token != NULL && strcasecmp(token, "DOWNLOADS") == 0)
           {
             write(1, "CHECK DOWNLOADS\n", strlen("CHECK DOWNLOADS\n"));
           }
@@ -145,10 +145,10 @@ void commandInterpreter()
             write(1, "Error: Missing arguments\n", strlen("Error: Missing arguments\n"));
           }
         }
-        else if (strcmp(token, "CLEAR") == 0)
+        else if (strcasecmp(token, "CLEAR") == 0)
         {
           token = strtok(NULL, " ");
-          if (token != NULL && strcmp(token, "DOWNLOADS") == 0)
+          if (token != NULL && strcasecmp(token, "DOWNLOADS") == 0)
           {
             write(1, "CLEAR DOWNLOADS\n", strlen("CLEAR DOWNLOADS\n"));
           }
@@ -167,7 +167,26 @@ void commandInterpreter()
         write(1, "ERROR: Please input a valid command.\n", strlen("ERROR: Please input a valid command.\n"));
       }
     }
-  } while (strcmp(command, "LOGOUT") != 0);
+  } while (strcasecmp(command, "LOGOUT") != 0);
+}
+
+void phaseOneTesting(Bowman bowman)
+{
+  char *buffer;
+  write(1, "File read correctly:\n", strlen("File read correctly:\n"));
+  asprintf(&buffer, "User - %s\n", bowman.username);
+  write(1, buffer, strlen(buffer));
+  free(buffer);
+  asprintf(&buffer, "Directory - %s\n", bowman.folder);
+  write(1, buffer, strlen(buffer));
+  free(buffer);
+  asprintf(&buffer, "IP - %s\n", bowman.ip);
+  write(1, buffer, strlen(buffer));
+  free(buffer);
+  asprintf(&buffer, "Port - %d\n", bowman.port);
+  write(1, buffer, strlen(buffer));
+  write(1, "\n", strlen("\n"));
+  free(buffer);
 }
 
 int main(int argc, char *argv[])
@@ -193,10 +212,12 @@ int main(int argc, char *argv[])
 
   asprintf(&buffer, "%s user initialized\n", bowman.username);
   write(1, buffer, strlen(buffer));
+  free(buffer);
+
+  // THIS IS FOR PHASE 1 TESTING
+  phaseOneTesting(bowman);
 
   commandInterpreter();
-
-  free(buffer);
 
   free(bowman.username);
   free(bowman.folder);

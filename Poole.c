@@ -62,6 +62,31 @@ Poole savePoole(int fd)
   return poole;
 }
 
+void phaseOneTesting(Poole poole)
+{
+  char *buffer;
+  write(1, "File read correctly:\n", strlen("File read correctly:\n"));
+  asprintf(&buffer, "Server - %s\n", poole.servername);
+  write(1, buffer, strlen(buffer));
+  free(buffer);
+  asprintf(&buffer, "Folder - %s\n", poole.folder);
+  write(1, buffer, strlen(buffer));
+  free(buffer);
+  asprintf(&buffer, "First IP - %s\n", poole.firstIP);
+  write(1, buffer, strlen(buffer));
+  free(buffer);
+  asprintf(&buffer, "First Port - %d\n", poole.firstPort);
+  write(1, buffer, strlen(buffer));
+  free(buffer);
+  asprintf(&buffer, "Second IP - %s\n", poole.secondIP);
+  write(1, buffer, strlen(buffer));
+  free(buffer);
+  asprintf(&buffer, "Second Port - %d\n", poole.secondPort);
+  write(1, buffer, strlen(buffer));
+  write(1, "\n", strlen("\n"));
+  free(buffer);
+}
+
 int main(int argc, char *argv[])
 {
 
@@ -81,6 +106,9 @@ int main(int argc, char *argv[])
   }
 
   Poole poole = savePoole(fd);
+
+  // THIS IS FOR PHASE 1 TESTING
+  phaseOneTesting(poole);
 
   free(poole.servername);
   free(poole.folder);
