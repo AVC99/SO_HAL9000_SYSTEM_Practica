@@ -1,10 +1,7 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -lpthread 
 
-all: main Bowman Poole
-
-main: main.c
-	$(CC) $(CFLAGS) -o main main.c 
+all: Bowman Poole
 
 connect.o: connect.c connect.h
 	$(CC) -c connect.c
