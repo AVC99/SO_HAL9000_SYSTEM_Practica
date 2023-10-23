@@ -3,11 +3,11 @@ CFLAGS = -Wall -Wextra -lpthread
 
 all: Bowman Poole
 
-connect.o: connect.c connect.h
-	$(CC) -c connect.c
+bowman_utilities.o: bowman_utilities.c bowman_utilities.h
+	$(CC) -c bowman_utilities.c
 
-Bowman: Bowman.c connect.o
-	$(CC) $(CFLAGS) -o Bowman Bowman.c connect.o
+Bowman: Bowman.c bowman_utilities.o
+	$(CC) $(CFLAGS) -o Bowman Bowman.c bowman_utilities.o
 
 Poole: Poole.c
 	$(CC) $(CFLAGS) -o Poole Poole.c

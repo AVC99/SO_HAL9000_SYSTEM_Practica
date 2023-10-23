@@ -1,6 +1,5 @@
 #define _GNU_SOURCE
-#include "connect.h"
-
+#include "bowman_utilities.h"
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <signal.h>
@@ -12,6 +11,8 @@
 #include <unistd.h>
 #include <time.h>
 
+// arnau.vives joan.medina I3_6
+
 typedef struct
 {
   char *username;
@@ -19,6 +20,8 @@ typedef struct
   char *ip;
   int port;
 } Bowman;
+
+Bowman bowman;
 
 // Read until the delimiter
 char *readUntil(char del, int fd)
@@ -43,29 +46,44 @@ char *readUntil(char del, int fd)
   return chain;
 }
 
-// TODO CHECK IF THE FILE IS CORRECTLY FORMATTED// NEED TO FREE THE MEMORY
 Bowman saveBowman(int fd)
 {
-  Bowman bowman;
 
   bowman.username = readUntil('\n', fd);
+  // check that the username does not contain &
+  if (strchr(bowman.username, '&') != NULL)
+  {
+    char *newUsername = malloc(strlen(bowman.username) * sizeof(char));
+    int j = 0;
+    for (size_t i = 0; i < strlen(bowman.username); i++)
+    {
+      if (bowman.username[i] != '&')
+      {
+        newUsername[j] = bowman.username[i];
+        j++;
+      }
+    }
+    newUsername[j] = '\0';
+    free(bowman.username);
+    bowman.username = newUsername;
+  }
+
   bowman.folder = readUntil('\n', fd);
   bowman.ip = readUntil('\n', fd);
   char *port = readUntil('\n', fd);
   bowman.port = atoi(port);
   free(port);
 
-  // check that the username does not contain &
-  if (strchr(bowman.username, '&') != NULL)
-  {
-    write(2, "Error: Invalid username\n", strlen("Error: Invalid username\n"));
-    exit(1);
-  }
-
   return bowman;
 }
 
-// TODO: Minor issue the command not found output is not the same as the one in the
+void freeMemory()
+{
+  free(bowman.username);
+  free(bowman.folder);
+  free(bowman.ip);
+}
+
 void commandInterpreter()
 {
   int bytesRead;
@@ -95,7 +113,7 @@ void commandInterpreter()
     }
     else if (strcasecmp(command, "LOGOUT") == 0)
     {
-      write(1, "THANKS FOR USING HAL 9000, see you soon, music lover!\n", strlen("THANKS FOR USING HAL 9000, see you soon, music lover!\n"));
+      logout();
     }
     else // IF THE COMMAND HAS MORE THAN ONE WORD
     {
@@ -108,9 +126,7 @@ void commandInterpreter()
           char *filename = strtok(NULL, " ");
           if (filename != NULL && strtok(NULL, " ") == NULL)
           {
-            write(1, "DOWNLOAD ", strlen("DOWNLOAD "));
-            write(1, filename, strlen(filename));
-            write(1, "\n", strlen("\n"));
+            downloadFile(filename);
           }
           else
           {
@@ -122,11 +138,11 @@ void commandInterpreter()
           token = strtok(NULL, " ");
           if (token != NULL && strcasecmp(token, "SONGS") == 0)
           {
-            write(1, "LIST SONGS\n", strlen("LIST SONGS\n"));
+            listSongs();
           }
           else if (token != NULL && strcasecmp(token, "PLAYLISTS") == 0)
           {
-            write(1, "LIST PLAYLISTS\n", strlen("LIST PLAYLISTS\n"));
+            listPlaylists();
           }
           else
           {
@@ -138,7 +154,7 @@ void commandInterpreter()
           token = strtok(NULL, " ");
           if (token != NULL && strcasecmp(token, "DOWNLOADS") == 0)
           {
-            write(1, "CHECK DOWNLOADS\n", strlen("CHECK DOWNLOADS\n"));
+            checkDownloads();
           }
           else
           {
@@ -150,7 +166,7 @@ void commandInterpreter()
           token = strtok(NULL, " ");
           if (token != NULL && strcasecmp(token, "DOWNLOADS") == 0)
           {
-            write(1, "CLEAR DOWNLOADS\n", strlen("CLEAR DOWNLOADS\n"));
+            clearDownloads();
           }
           else
           {
@@ -170,7 +186,13 @@ void commandInterpreter()
   } while (strcasecmp(command, "LOGOUT") != 0);
 }
 
-void phaseOneTesting(Bowman bowman)
+void closeProgram()
+{
+  freeMemory();
+  exit(0);
+}
+
+void phaseOneTesting()
 {
   char *buffer;
   write(1, "File read correctly:\n", strlen("File read correctly:\n"));
@@ -207,8 +229,9 @@ int main(int argc, char *argv[])
     write(2, "Error: File not found\n", strlen("Error: File not found\n"));
     return 1;
   }
+  signal(SIGINT, closeProgram);
 
-  Bowman bowman = saveBowman(fd);
+  saveBowman(fd);
 
   asprintf(&buffer, "%s user initialized\n", bowman.username);
   write(1, buffer, strlen(buffer));
@@ -216,14 +239,11 @@ int main(int argc, char *argv[])
 
   // THIS IS FOR PHASE 1 TESTING
   phaseOneTesting(bowman);
+  close(fd);
 
   commandInterpreter();
 
-  free(bowman.username);
-  free(bowman.folder);
-  free(bowman.ip);
-
-  close(fd);
+  freeMemory();
 
   return 0;
 }

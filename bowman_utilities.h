@@ -10,4 +10,12 @@
 #include <unistd.h>
 #include <time.h>
 
+// arnau.vives joan.medina I3_6
+
 void connect();
+void listSongs();
+void checkDownloads();
+void clearDownloads();
+void listPlaylists();
+void downloadFile(char *file);
+void logout();

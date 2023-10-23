@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <time.h>
 
+// arnau.vives joan.medina I3_6
 typedef struct
 {
   char *servername;
@@ -20,6 +21,7 @@ typedef struct
   int secondPort;
 } Poole;
 
+Poole poole;
 // Read until the delimiter
 char *readUntil(char del, int fd)
 {
@@ -43,11 +45,8 @@ char *readUntil(char del, int fd)
   return chain;
 }
 
-// TODO: Check if the file is correctly formatted
 Poole savePoole(int fd)
 {
-  Poole poole;
-
   poole.servername = readUntil('\n', fd);
   poole.folder = readUntil('\n', fd);
   poole.firstIP = readUntil('\n', fd);
@@ -87,6 +86,18 @@ void phaseOneTesting(Poole poole)
   free(buffer);
 }
 
+void freeMemory()
+{
+  free(poole.servername);
+  free(poole.folder);
+  free(poole.firstIP);
+  free(poole.secondIP);
+}
+void closeProgram()
+{
+  freeMemory();
+  exit(0);
+}
 int main(int argc, char *argv[])
 {
 
@@ -104,18 +115,15 @@ int main(int argc, char *argv[])
     write(2, "Error: File not found\n", strlen("Error: File not found\n"));
     return 1;
   }
+  signal(SIGINT, closeProgram);
+  poole = savePoole(fd);
 
-  Poole poole = savePoole(fd);
+  close(fd);
 
   // THIS IS FOR PHASE 1 TESTING
   phaseOneTesting(poole);
 
-  free(poole.servername);
-  free(poole.folder);
-  free(poole.firstIP);
-  free(poole.secondIP);
-
-  close(fd);
+  freeMemory();
 
   return 0;
 }

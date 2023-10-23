@@ -5,5 +5,8 @@
 #UNIGNORE DIRECTORIES 
 !*/
 
+*.tar
+*.tar.gz
 *.pdf
 *.vscode
+.DS_Store
