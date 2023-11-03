@@ -1,15 +1,6 @@
 #define _GNU_SOURCE
 #include "bowman_utilities.h"
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <fcntl.h>
-#include <assert.h>
-#include <unistd.h>
-#include <time.h>
+#include "read_until.h"
 
 // arnau.vives joan.medina I3_6
 
@@ -23,29 +14,10 @@ typedef struct
 
 Bowman bowman;
 
-// Read until the delimiter
-char *readUntil(char del, int fd)
-{
 
-  char *chain = malloc(sizeof(char));
-  char c;
-  int i = 0, n;
-
-  n = read(fd, &c, 1);
-
-  while (c != del && n != 0)
-  {
-    chain[i] = c;
-    i++;
-    chain = realloc(chain, (sizeof(char) * (i + 1)));
-    n = read(fd, &c, 1);
-  }
-
-  chain[i] = '\0';
-
-  return chain;
-}
-
+/**
+ * Saves the bowman information from the file descriptor
+*/
 Bowman saveBowman(int fd)
 {
 
@@ -77,6 +49,9 @@ Bowman saveBowman(int fd)
   return bowman;
 }
 
+/**
+ * Frees all the memory allocated from the global bowman 
+*/
 void freeMemory()
 {
   free(bowman.username);
@@ -84,16 +59,20 @@ void freeMemory()
   free(bowman.ip);
 }
 
+/**
+ * Reads the commands from the user and executes them until LOGOUT is called
+*/
 void commandInterpreter()
 {
   int bytesRead;
-  char command[256];
+  char *command;
 
   do
   {
     write(1, "$ ", 2);
     // READ THE COMMAND
-    bytesRead = read(0, command, sizeof(command));
+    command = readUntil('\n', 0);
+    bytesRead = strlen(command);
     if (bytesRead == 0)
     {
       break;
@@ -184,14 +163,21 @@ void commandInterpreter()
       }
     }
   } while (strcasecmp(command, "LOGOUT") != 0);
+  free(command);
 }
 
+/**
+ * Closes the program
+*/
 void closeProgram()
 {
   freeMemory();
   exit(0);
 }
 
+/**
+ * Prints the information of the bowman only for phase 1 testing
+*/
 void phaseOneTesting()
 {
   char *buffer;
@@ -210,7 +196,9 @@ void phaseOneTesting()
   write(1, "\n", strlen("\n"));
   free(buffer);
 }
-
+/**
+ * Main function of Bowman program
+*/
 int main(int argc, char *argv[])
 {
   char *buffer;
