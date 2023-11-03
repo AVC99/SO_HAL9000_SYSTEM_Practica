@@ -1,6 +1,19 @@
 #define _GNU_SOURCE
 #include "read_until.h"
-
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/time.h>
+#include <sys/ioctl.h>
+#include <netdb.h>
+#include <pthread.h>
 // arnau.vives joan.medina I3_6
 typedef struct
 {
@@ -13,13 +26,15 @@ typedef struct
 } Poole;
 
 Poole poole;
-
+int listenFD;
 
 Poole savePoole(int fd)
 {
+  write(1, "Reading configuration file...\n", strlen("Reading configuration file...\n"));
+
   poole.servername = readUntil('\n', fd);
 
-  //check that the servername does not contain &
+  // check that the servername does not contain &
   if (strchr(poole.servername, '&') != NULL)
   {
     char *newServername = malloc(strlen(poole.servername) * sizeof(char));
@@ -36,8 +51,6 @@ Poole savePoole(int fd)
     free(poole.servername);
     poole.servername = newServername;
   }
-
-
 
   poole.folder = readUntil('\n', fd);
   poole.firstIP = readUntil('\n', fd);
@@ -84,13 +97,57 @@ void freeMemory()
   free(poole.firstIP);
   free(poole.secondIP);
 }
+
 void closeProgram()
 {
   freeMemory();
   exit(0);
 }
+
+void createSocket()
+{
+  struct sockaddr_in poole_server;
+
+  if ((listenFD = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
+  {
+    write(1, "Error creating the socket\n", strlen("Error creating the socket\n"));
+    exit(1);
+  }
+  // REMOVE THIS
+  printf("IP: %s\n", poole.firstIP);
+
+  bzero(&poole_server, sizeof(poole_server));
+  poole_server.sin_port = htons(poole.firstPort);
+  poole_server.sin_family = AF_INET;
+  poole_server.sin_addr.s_addr = inet_pton(AF_INET, poole.firstIP, &poole_server.sin_addr);
+
+  int s = inet_pton(AF_INET, poole.firstIP, &poole_server.sin_addr);
+  printf("INET_PTON: %d\n", s);
+  if (inet_pton(AF_INET, poole.firstIP, (&poole_server.sin_addr)) != 1)
+  {
+    write(1, "Error converting the IP address\n", strlen("Error converting the IP address\n"));
+    exit(1);
+  }
+  write(1, "Socket created\n", strlen("Socket created\n"));
+
+  if (bind(listenFD, (struct sockaddr *)&poole_server, sizeof(poole_server)) < 0)
+  {
+    write(1, "Error binding the socket\n", strlen("Error binding the socket\n"));
+    exit(1);
+  }
+
+  write(1, "Socket binded\n", strlen("Socket binded\n"));
+
+  /*while(1)
+   {
+     write(1, "Waiting for connections...\n", strlen("Waiting for connections...\n"));
+   }*/
+}
+
 int main(int argc, char *argv[])
 {
+  // Reprogram the SIGINT signal
+  signal(SIGINT, closeProgram);
 
   // Check if the arguments are provided
   if (argc < 2)
@@ -99,20 +156,22 @@ int main(int argc, char *argv[])
     return 1;
   }
 
+  // Check if the file exists and can be opened
   int fd = open(argv[1], O_RDONLY);
-
   if (fd < 0)
   {
     write(2, "Error: File not found\n", strlen("Error: File not found\n"));
     return 1;
   }
-  signal(SIGINT, closeProgram);
-  poole = savePoole(fd);
 
+  // Save the poole information
+  poole = savePoole(fd);
   close(fd);
 
   // THIS IS FOR PHASE 1 TESTING
   phaseOneTesting(poole);
+
+  createSocket();
 
   freeMemory();
 

@@ -1,6 +1,14 @@
 #define _GNU_SOURCE
 #include "read_until.h"
 #include <stdio.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/ioctl.h>
+#include <netdb.h>
+#include <pthread.h>
+
+
+// arnau.vives joan.medina I3_6
 
 typedef struct
 {
@@ -17,7 +25,7 @@ Discovery discovery;
 */
 void saveDiscovery(int fd)
 {
-  printf("Saving discovery\n");
+  write(1, "Reading configuration file...\n", strlen("Reading configuration file...\n"));
   discovery.firstIP = readUntil('\n', fd);
   printf("First IP: %s\n", discovery.firstIP);
   char *firstPort = readUntil('\n', fd);
@@ -42,10 +50,17 @@ void freeMemory()
 /**
  * Closes the program
 */
-void closeProgram(int signal)
+void closeProgram()
 {
   freeMemory();
   exit(0);
+}
+
+void runDiscovery()
+{
+  
+
+
 }
 
 int main(int argc, char *argv[])
@@ -66,6 +81,8 @@ int main(int argc, char *argv[])
   }
 
   saveDiscovery(fd);
+
+  runDiscovery();
 
   freeMemory();
   return 0;
