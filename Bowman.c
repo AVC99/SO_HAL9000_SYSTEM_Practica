@@ -18,7 +18,7 @@ Bowman bowman;
 /**
  * Saves the bowman information from the file descriptor
 */
-Bowman saveBowman(int fd)
+void saveBowman(int fd)
 {
 
   bowman.username = readUntil('\n', fd);
@@ -46,7 +46,6 @@ Bowman saveBowman(int fd)
   bowman.port = atoi(port);
   free(port);
 
-  return bowman;
 }
 
 /**
@@ -206,7 +205,7 @@ int main(int argc, char *argv[])
   // Check if the arguments are provided
   if (argc < 2)
   {
-    write(2, "Error: Missing arguments\n", strlen("Error: Missing arguments\n"));
+    write(1, "Error: Missing arguments\n", strlen("Error: Missing arguments\n"));
     return 1;
   }
 
@@ -214,7 +213,7 @@ int main(int argc, char *argv[])
 
   if (fd < 0)
   {
-    write(2, "Error: File not found\n", strlen("Error: File not found\n"));
+    write(1, "Error: File not found\n", strlen("Error: File not found\n"));
     return 1;
   }
   signal(SIGINT, closeProgram);
