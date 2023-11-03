@@ -1,14 +1,5 @@
 #define _GNU_SOURCE
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <fcntl.h>
-#include <assert.h>
-#include <unistd.h>
-#include <time.h>
+#include "read_until.h"
 
 // arnau.vives joan.medina I3_6
 typedef struct
@@ -22,32 +13,32 @@ typedef struct
 } Poole;
 
 Poole poole;
-// Read until the delimiter
-char *readUntil(char del, int fd)
-{
 
-  char *chain = malloc(sizeof(char));
-  char c;
-  int i = 0, n;
-
-  n = read(fd, &c, 1);
-
-  while (c != del && n != 0)
-  {
-    chain[i] = c;
-    i++;
-    chain = realloc(chain, (sizeof(char) * (i + 1)));
-    n = read(fd, &c, 1);
-  }
-
-  chain[i] = '\0';
-
-  return chain;
-}
 
 Poole savePoole(int fd)
 {
   poole.servername = readUntil('\n', fd);
+
+  //check that the servername does not contain &
+  if (strchr(poole.servername, '&') != NULL)
+  {
+    char *newServername = malloc(strlen(poole.servername) * sizeof(char));
+    int j = 0;
+    for (size_t i = 0; i < strlen(poole.servername); i++)
+    {
+      if (poole.servername[i] != '&')
+      {
+        newServername[j] = poole.servername[i];
+        j++;
+      }
+    }
+    newServername[j] = '\0';
+    free(poole.servername);
+    poole.servername = newServername;
+  }
+
+
+
   poole.folder = readUntil('\n', fd);
   poole.firstIP = readUntil('\n', fd);
   char *port = readUntil('\n', fd);
