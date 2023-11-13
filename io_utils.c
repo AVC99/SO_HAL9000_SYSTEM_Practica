@@ -10,6 +10,10 @@
 #include <unistd.h>
 #include <time.h>
 
+void printToConsole(char *x){
+  write(1, x, strlen(x));
+}
+
 char *readUntil(char del, int fd)
 {
 
