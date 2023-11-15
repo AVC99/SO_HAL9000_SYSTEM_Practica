@@ -1,21 +1,20 @@
 #define _GNU_SOURCE
 #include "io_utils.h"
+#include "struct_definitions.h"
+
 #include <stdio.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <netdb.h>
 #include <pthread.h>
+#include <arpa/inet.h>
+
+
 
 // arnau.vives joan.medina I3_6
 
-typedef struct
-{
-  char *firstIP;
-  int firstPort;
-  char *secondIP;
-  int secondPort;
-} Discovery;
+
 
 Discovery discovery;
 int listenFD;
@@ -27,7 +26,6 @@ void getDiscoveryFromFile(int fd)
 {
   write(1, "Reading configuration file...\n", strlen("Reading configuration file...\n"));
   discovery.firstIP = readUntil('\n', fd);
-  printf("First IP: %s\n", discovery.firstIP);
   char *firstPort = readUntil('\n', fd);
   discovery.firstPort = atoi(firstPort);
   free(firstPort);
@@ -45,6 +43,8 @@ void freeMemory()
 {
   free(discovery.firstIP);
   free(discovery.secondIP);
+
+  close(listenFD);
 }
 
 /**
@@ -63,42 +63,48 @@ void runDiscovery()
 
   if ((listenFD = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
   {
-    write(1, "Error creating the socket\n", strlen("Error creating the socket\n"));
+    printError("Error creating the socket\n");
     exit(1);
   }
 
+  // configuring the server
   bzero(&server, sizeof(server));
   server.sin_port = htons(discovery.firstPort);
   server.sin_family = AF_INET;
   server.sin_addr.s_addr = inet_pton(AF_INET, discovery.firstIP, &server.sin_addr);
 
-  if (inet_pton(AF_INET, discovery.firstIP, &server.sin_addr))
+  // checking if the IP address is valid
+  if (inet_pton(AF_INET, discovery.firstIP, &server.sin_addr) <= 0)
   {
-    write(1, "Error converting the IP address\n", strlen("Error converting the IP address\n"));
+    printError("Invalid IP address\n");
     exit(1);
   }
-  write(1, "Socket created\n", strlen("Socket created\n"));
 
+  printToConsole("Socket created\n");
+  // checking if the port is valid
   if (bind(listenFD, (struct sockaddr *)&server, sizeof(server)) < 0)
   {
-    write(1, "Error binding the socket\n", strlen("Error binding the socket\n"));
+    printError("Error while binding\n");
     exit(1);
   }
 
   write(1, "Socket binded\n", strlen("Socket binded\n"));
-
+  // listening for connections
   if (listen(listenFD, 10) < 0)
   {
-    printF("Error while listening\n");
+    printError("Error while listening\n");
+    exit(1);
   }
 
   while (1)
   {
-    printF("Waiting for connections...\n");
+    printToConsole("Waiting for connections...\n");
 
     clientFD = accept(listenFD, (struct sockaddr *)NULL, NULL);
 
-    printF("\nNew client connected !\n");
+    printToConsole("\nNew client connected !\n");
+
+    // TODO: Handle the client
 
     close(clientFD);
   }
@@ -108,16 +114,18 @@ int main(int argc, char *argv[])
 {
   // Reprogram the SIGINT signal
   signal(SIGINT, closeProgram);
+  
 
+  // Check if the arguments are provided
   if (argc != 2)
   {
-    write(1, "Error: Invalid number of arguments\n", strlen("Error: Invalid number of arguments\n"));
+    printError("Error: Missing arguments\n");
     return 1;
   }
   int fd = open(argv[1], O_RDONLY);
   if (fd < 0)
   {
-    write(1, "Error: File not found\n", strlen("Error: File not found\n"));
+    printError("Error: File not found\n");
     return 1;
   }
 

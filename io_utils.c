@@ -1,4 +1,4 @@
-#define _GNU_SOURCE 
+#define _GNU_SOURCE
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <signal.h>
@@ -10,13 +10,18 @@
 #include <unistd.h>
 #include <time.h>
 
-void printToConsole(char *x){
+void printToConsole(char *x)
+{
   write(1, x, strlen(x));
+}
+
+void printError(char *x)
+{
+  write(2, x, strlen(x));
 }
 
 char *readUntil(char del, int fd)
 {
-
   char *chain = malloc(sizeof(char));
   char c;
   int i = 0, n;
@@ -34,4 +39,4 @@ char *readUntil(char del, int fd)
   chain[i] = '\0';
 
   return chain;
-} 
+}

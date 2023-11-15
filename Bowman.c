@@ -1,26 +1,20 @@
 #define _GNU_SOURCE
 #include "bowman_utilities.h"
 #include "io_utils.h"
+#include "struct_definitions.h"
+
 
 // arnau.vives joan.medina I3_6
 
-typedef struct
-{
-  char *username;
-  char *folder;
-  char *ip;
-  int port;
-} Bowman;
+
 
 Bowman bowman;
 
-
 /**
  * Saves the bowman information from the file descriptor
-*/
+ */
 void saveBowman(int fd)
 {
-
   bowman.username = readUntil('\n', fd);
   // check that the username does not contain &
   if (strchr(bowman.username, '&') != NULL)
@@ -45,14 +39,14 @@ void saveBowman(int fd)
   char *port = readUntil('\n', fd);
   bowman.port = atoi(port);
   free(port);
-
 }
 
 /**
- * Frees all the memory allocated from the global bowman 
-*/
+ * Frees all the memory allocated from the global bowman
+ */
 void freeMemory()
 {
+  //freeUtilitiesBowman();
   free(bowman.username);
   free(bowman.folder);
   free(bowman.ip);
@@ -60,7 +54,7 @@ void freeMemory()
 
 /**
  * Reads the commands from the user and executes them until LOGOUT is called
-*/
+ */
 void commandInterpreter()
 {
   int bytesRead;
@@ -87,7 +81,7 @@ void commandInterpreter()
     // CHECK THE COMMAND can not use SWITCH because it does not work with strings :(
     if (strcasecmp(command, "CONNECT") == 0)
     {
-      connect();
+      connectToDiscovery();
     }
     else if (strcasecmp(command, "LOGOUT") == 0)
     {
@@ -167,7 +161,7 @@ void commandInterpreter()
 
 /**
  * Closes the program
-*/
+ */
 void closeProgram()
 {
   freeMemory();
@@ -176,7 +170,7 @@ void closeProgram()
 
 /**
  * Prints the information of the bowman only for phase 1 testing
-*/
+ */
 void phaseOneTesting()
 {
   char *buffer;
@@ -195,9 +189,15 @@ void phaseOneTesting()
   write(1, "\n", strlen("\n"));
   free(buffer);
 }
+
+void createSocket()
+{
+  
+}
+
 /**
  * Main function of Bowman program
-*/
+ */
 int main(int argc, char *argv[])
 {
   char *buffer;
@@ -219,14 +219,19 @@ int main(int argc, char *argv[])
   signal(SIGINT, closeProgram);
 
   saveBowman(fd);
+  phaseOneTesting(bowman);
+  setBowman(bowman);
+  
 
   asprintf(&buffer, "%s user initialized\n", bowman.username);
   write(1, buffer, strlen(buffer));
   free(buffer);
 
   // THIS IS FOR PHASE 1 TESTING
-  phaseOneTesting(bowman);
+  
   close(fd);
+
+  createSocket();
 
   commandInterpreter();
 

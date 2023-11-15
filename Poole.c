@@ -1,5 +1,7 @@
 #define _GNU_SOURCE
 #include "io_utils.h"
+#include "struct_definitions.h"
+
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <signal.h>
@@ -15,15 +17,6 @@
 #include <netdb.h>
 #include <pthread.h>
 // arnau.vives joan.medina I3_6
-typedef struct
-{
-  char *servername;
-  char *folder;
-  char *firstIP;
-  int firstPort;
-  char *secondIP;
-  int secondPort;
-} Poole;
 
 Poole poole;
 int listenFD;
