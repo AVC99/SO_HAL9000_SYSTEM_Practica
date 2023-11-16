@@ -10,11 +10,7 @@
 #include <pthread.h>
 #include <arpa/inet.h>
 
-
-
 // arnau.vives joan.medina I3_6
-
-
 
 Discovery discovery;
 int listenFD;
@@ -24,7 +20,7 @@ int listenFD;
  */
 void getDiscoveryFromFile(int fd)
 {
-  write(1, "Reading configuration file...\n", strlen("Reading configuration file...\n"));
+  printToConsole("Reading configuration file...\n");
   discovery.firstIP = readUntil('\n', fd);
   char *firstPort = readUntil('\n', fd);
   discovery.firstPort = atoi(firstPort);
@@ -36,6 +32,7 @@ void getDiscoveryFromFile(int fd)
 
   close(fd);
 }
+
 /**
  * Frees all the memory allocated from the global Discovery
  */
@@ -102,9 +99,35 @@ void runDiscovery()
 
     clientFD = accept(listenFD, (struct sockaddr *)NULL, NULL);
 
+    if (clientFD < 0)
+    {
+      printError("Error while accepting\n");
+      exit(1);
+    }
     printToConsole("\nNew client connected !\n");
+    char *buffer = malloc(sizeof(char));
+    ssize_t bytesread = read(clientFD, buffer, sizeof(buffer));
 
-    // TODO: Handle the client
+    for (ssize_t i = 0; i < bytesread; i++)
+    {
+      printf("0x%02x ", (unsigned char)buffer[i]);
+    }
+    printf("\n");
+    uint16_t headerLength;
+    bytesread = read(clientFD, &headerLength, sizeof(headerLength));
+    
+
+    headerLength = ntohs(headerLength); // Convert to host byte order
+
+    printf("Header length: %u\n", headerLength);
+
+    char *header = malloc(headerLength + 1);
+    read(clientFD, header, headerLength);
+    printf("Header: %s\n", header);
+
+    char *data = malloc(sizeof(char) * 256);
+    read(clientFD, data, sizeof(data));
+    printf("Data: %s\n", data);
 
     close(clientFD);
   }
@@ -114,7 +137,6 @@ int main(int argc, char *argv[])
 {
   // Reprogram the SIGINT signal
   signal(SIGINT, closeProgram);
-  
 
   // Check if the arguments are provided
   if (argc != 2)

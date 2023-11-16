@@ -16,6 +16,7 @@
 #include <sys/types.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#include <stdint.h>
 
 // arnau.vives joan.medina I3_6
 
@@ -40,29 +41,50 @@ void freeUtilitiesBowman()
 
 void connectToDiscovery()
 {
-  write(1, "CONNECT\n", strlen("CONNECT\n"));
+  printToConsole("CONNECT\n");
+
   int socketFD;
   struct sockaddr_in server;
 
+  // Create socket
   if ((socketFD = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
   {
     printError("Error creating the socket\n");
   }
 
+  // configure server
   bzero(&server, sizeof(server));
   server.sin_family = AF_INET;
   server.sin_port = htons(bowman.port);
 
+  // Convert IPv4 and IPv6 addresses from text to binary form
   if (inet_pton(AF_INET, bowman.ip, &server.sin_addr) < 0)
   {
     printError("Error configuring IP\n");
   }
+  // Connect to server
   if (connect(socketFD, (struct sockaddr *)&server, sizeof(server)) < 0)
   {
     printError("Error connecting\n");
   }
-   printToConsole("Connected to Discovery\n");
+  // CONNECTED TO DISCOVERY
+  // TODO: DO SOMETHING
+  // send type
+  printToConsole("Connected to Discovery\n");
+  uint8_t type = 0x01;
+  write(socketFD, &type, 1);
 
+  // Send header length
+  uint16_t headerLength = strlen("NEW_BOWMAN");
+  headerLength = htons(headerLength); // Convert to network byte order
+  write(socketFD, &headerLength, sizeof(headerLength));
+
+  // Send header
+  write(socketFD, "NEW_BOWMAN", strlen("NEW_BOWMAN"));
+  write(socketFD, bowman.username, strlen(bowman.username));
+
+  //Send data
+  write(socketFD, bowman.username, strlen(bowman.username));
 }
 
 void listSongs()
@@ -92,5 +114,5 @@ void downloadFile(char *file)
 }
 void logout()
 {
-  write(1, "THANKS FOR USING HAL 9000, see you soon, music lover!\n", strlen("THANKS FOR USING HAL 9000, see you soon, music lover!\n"));
+  printToConsole("THANKS FOR USING HAL 9000, see you soon, music lover!\n");
 }
