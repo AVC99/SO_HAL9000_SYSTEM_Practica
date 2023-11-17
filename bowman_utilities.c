@@ -39,6 +39,51 @@ void freeUtilitiesBowman()
   free(bowman.ip);
 }
 
+SocketMessage processClient(int clientFD)
+{
+  //TODO: REMOVE PRINTF's
+  SocketMessage message;
+  // get the type
+  uint8_t type;
+  ssize_t bytesread = read(clientFD, &type, sizeof(type));
+  if (bytesread == sizeof(type))
+  {
+    printf("Type: 0x%02x\n", type);
+  }
+  else
+  {
+    printf("Error reading type\n");
+  }
+  message.type = type;
+
+  // get the header length
+  uint16_t headerLength;
+  bytesread = read(clientFD, &headerLength, sizeof(headerLength));
+  headerLength = ntohs(headerLength); // Convert to host byte order
+  printf("Header length: %u\n", headerLength);
+  message.headerLength = headerLength;
+
+  // get the header
+  char *header = malloc(headerLength + 1);
+  read(clientFD, header, headerLength);
+  header[headerLength] = '\0';
+  printf("Header: %s\n", header);
+  message.header = header;
+  //free(header);
+
+  // get the data
+  char *data = malloc(255);
+  ssize_t dataBytesRead = read(clientFD, data, sizeof(data));
+  printf("Data bytes read: %ld\n", dataBytesRead);
+   data[dataBytesRead] = '\0';
+  printf("Data: %s\n", data);
+ 
+  message.data = data;
+  //free(data);
+
+  return message;
+}
+
 void connectToDiscovery()
 {
   printToConsole("CONNECT\n");
@@ -86,7 +131,10 @@ void connectToDiscovery()
   write(socketFD, bowman.username, strlen(bowman.username));
 
   //TODO: Receive response ------------------------------------------------
-  
+  SocketMessage message = processClient(socketFD);
+
+  free(message.header);
+  free(message.data);
 
 }
 

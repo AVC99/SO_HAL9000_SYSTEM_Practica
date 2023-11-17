@@ -55,6 +55,7 @@ void closeProgram()
 
 SocketMessage processClient(int clientFD)
 {
+  //TODO: REMOVE PRINTF's
   SocketMessage message;
   // get the type
   uint8_t type;
@@ -126,7 +127,8 @@ void runDiscovery()
     exit(1);
   }
 
-  write(1, "Socket binded\n", strlen("Socket binded\n"));
+  printToConsole("Socket binded\n");
+
   // listening for connections
   if (listen(listenFD, 10) < 0)
   {
@@ -136,7 +138,7 @@ void runDiscovery()
 
   while (1)
   {
-    printToConsole("Waiting for connections...\n");
+    printToConsole("\nWaiting for connections...\n");
 
     clientFD = accept(listenFD, (struct sockaddr *)NULL, NULL);
 
@@ -154,8 +156,20 @@ void runDiscovery()
     if (strcmp(message.header, "NEW_BOWMAN") == 0)
     {
       printf("NEW_BOWMAN DETECTED\n");
+      SocketMessage response;
+      response.type = 0x01;
+      response.headerLength = strlen("CON_OK");
+      response.header = "CON_OK";
+      response.data = "FUTURE_SERVER_NAME&FUTURE_SERVER_IP&FUTURE_SERVER_PORT";
+
+      write(clientFD, &response.type, sizeof(response.type));
+      uint16_t headerLength = htons(response.headerLength);
+      write(clientFD, &headerLength, sizeof(headerLength));
+      write(clientFD, response.header, response.headerLength);
+      write(clientFD, response.data, strlen(response.data));
     }
     
+
 
 
     //TODO: CHECK WHEN I NEED TO FREE THIS MEMORY
