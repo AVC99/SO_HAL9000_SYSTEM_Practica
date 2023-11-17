@@ -14,6 +14,7 @@
 #include <time.h>
 
 // arnau.vives joan.medina I3_6
+
 void setBowman(Bowman bowman);
 void connectToDiscovery();
 void listSongs();

@@ -53,6 +53,32 @@ void closeProgram()
   exit(0);
 }
 
+void getSocketData(int clientFD)
+{
+  char *buffer = malloc(sizeof(char));
+  ssize_t bytesread = read(clientFD, buffer, sizeof(buffer));
+
+  for (ssize_t i = 0; i < bytesread; i++)
+  {
+    printf("0x%02x ", (unsigned char)buffer[i]);
+  }
+  printf("\n");
+  uint16_t headerLength;
+  bytesread = read(clientFD, &headerLength, sizeof(headerLength));
+
+  headerLength = ntohs(headerLength); // Convert to host byte order
+
+  printf("Header length: %u\n", headerLength);
+
+  char *header = malloc(headerLength + 1);
+  read(clientFD, header, headerLength);
+  printf("Header: %s\n", header);
+
+  char *data = malloc(sizeof(char) * 256);
+  read(clientFD, data, sizeof(data));
+  printf("Data: %s\n", data);
+}
+
 void runDiscovery()
 {
   int clientFD;
@@ -105,6 +131,9 @@ void runDiscovery()
       exit(1);
     }
     printToConsole("\nNew client connected !\n");
+
+    //getSocketData(clientFD);
+    
     char *buffer = malloc(sizeof(char));
     ssize_t bytesread = read(clientFD, buffer, sizeof(buffer));
 
@@ -115,7 +144,7 @@ void runDiscovery()
     printf("\n");
     uint16_t headerLength;
     bytesread = read(clientFD, &headerLength, sizeof(headerLength));
-    
+
 
     headerLength = ntohs(headerLength); // Convert to host byte order
 
@@ -132,6 +161,8 @@ void runDiscovery()
     close(clientFD);
   }
 }
+
+
 
 int main(int argc, char *argv[])
 {
