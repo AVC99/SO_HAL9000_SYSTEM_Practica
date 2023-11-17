@@ -67,8 +67,8 @@ void connectToDiscovery()
   {
     printError("Error connecting\n");
   }
+
   // CONNECTED TO DISCOVERY
-  // TODO: DO SOMETHING
   // send type
   printToConsole("Connected to Discovery\n");
   uint8_t type = 0x01;
@@ -81,10 +81,13 @@ void connectToDiscovery()
 
   // Send header
   write(socketFD, "NEW_BOWMAN", strlen("NEW_BOWMAN"));
-  write(socketFD, bowman.username, strlen(bowman.username));
 
   //Send data
   write(socketFD, bowman.username, strlen(bowman.username));
+
+  //TODO: Receive response ------------------------------------------------
+  
+
 }
 
 void listSongs()

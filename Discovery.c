@@ -53,30 +53,45 @@ void closeProgram()
   exit(0);
 }
 
-void getSocketData(int clientFD)
+SocketMessage processClient(int clientFD)
 {
-  char *buffer = malloc(sizeof(char));
-  ssize_t bytesread = read(clientFD, buffer, sizeof(buffer));
-
-  for (ssize_t i = 0; i < bytesread; i++)
+  SocketMessage message;
+  // get the type
+  uint8_t type;
+  ssize_t bytesread = read(clientFD, &type, sizeof(type));
+  if (bytesread == sizeof(type))
   {
-    printf("0x%02x ", (unsigned char)buffer[i]);
+    printf("Type: 0x%02x\n", type);
   }
-  printf("\n");
+  else
+  {
+    printf("Error reading type\n");
+  }
+  message.type = type;
+
+  // get the header length
   uint16_t headerLength;
   bytesread = read(clientFD, &headerLength, sizeof(headerLength));
-
   headerLength = ntohs(headerLength); // Convert to host byte order
-
   printf("Header length: %u\n", headerLength);
+  message.headerLength = headerLength;
 
+  // get the header
   char *header = malloc(headerLength + 1);
   read(clientFD, header, headerLength);
+  header[headerLength] = '\0';
   printf("Header: %s\n", header);
+  message.header = header;
+  //free(header);
 
+  // get the data
   char *data = malloc(sizeof(char) * 256);
-  read(clientFD, data, sizeof(data));
-  printf("Data: %s\n", data);
+  ssize_t dataBytesRead = read(clientFD, data, sizeof(data));
+  printf("Data: %.*s\n", (int)dataBytesRead, data);
+  message.data = data;
+  //free(data);
+
+  return message;
 }
 
 void runDiscovery()
@@ -132,37 +147,26 @@ void runDiscovery()
     }
     printToConsole("\nNew client connected !\n");
 
-    //getSocketData(clientFD);
-    
-    char *buffer = malloc(sizeof(char));
-    ssize_t bytesread = read(clientFD, buffer, sizeof(buffer));
+    // GET SOCKET DATA
+    SocketMessage message = processClient(clientFD);
 
-    for (ssize_t i = 0; i < bytesread; i++)
+
+    if (strcmp(message.header, "NEW_BOWMAN") == 0)
     {
-      printf("0x%02x ", (unsigned char)buffer[i]);
+      printf("NEW_BOWMAN DETECTED\n");
     }
-    printf("\n");
-    uint16_t headerLength;
-    bytesread = read(clientFD, &headerLength, sizeof(headerLength));
+    
 
 
-    headerLength = ntohs(headerLength); // Convert to host byte order
+    //TODO: CHECK WHEN I NEED TO FREE THIS MEMORY
+    // FREE MEMORY FROM MESSAGE
+    free(message.header);
+    free(message.data);
 
-    printf("Header length: %u\n", headerLength);
-
-    char *header = malloc(headerLength + 1);
-    read(clientFD, header, headerLength);
-    printf("Header: %s\n", header);
-
-    char *data = malloc(sizeof(char) * 256);
-    read(clientFD, data, sizeof(data));
-    printf("Data: %s\n", data);
 
     close(clientFD);
   }
 }
-
-
 
 int main(int argc, char *argv[])
 {
