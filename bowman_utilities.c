@@ -77,6 +77,7 @@ SocketMessage processClient(int clientFD)
   printf("Data bytes read: %ld\n", dataBytesRead);
    data[dataBytesRead] = '\0';
   printf("Data: %s\n", data);
+
  
   message.data = data;
   //free(data);

@@ -168,9 +168,7 @@ void runDiscovery()
       write(clientFD, response.header, response.headerLength);
       write(clientFD, response.data, strlen(response.data));
     }
-    
-
-
+  
 
     //TODO: CHECK WHEN I NEED TO FREE THIS MEMORY
     // FREE MEMORY FROM MESSAGE
