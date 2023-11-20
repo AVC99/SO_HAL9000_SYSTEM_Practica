@@ -106,22 +106,18 @@ void createSocket()
     write(1, "Error creating the socket\n", strlen("Error creating the socket\n"));
     exit(1);
   }
-  // REMOVE THIS
-  printf("IP: %s\n", poole.firstIP);
 
   bzero(&poole_server, sizeof(poole_server));
   poole_server.sin_port = htons(poole.firstPort);
   poole_server.sin_family = AF_INET;
   poole_server.sin_addr.s_addr = inet_pton(AF_INET, poole.firstIP, &poole_server.sin_addr);
 
-  int s = inet_pton(AF_INET, poole.firstIP, &poole_server.sin_addr);
-  printf("INET_PTON: %d\n", s);
   if (inet_pton(AF_INET, poole.firstIP, (&poole_server.sin_addr)) != 1)
   {
-    write(1, "Error converting the IP address\n", strlen("Error converting the IP address\n"));
+    printToConsole("Error converting the IP address\n");
     exit(1);
   }
-  write(1, "Socket created\n", strlen("Socket created\n"));
+  printToConsole("Socket created\n");
 
   if (bind(listenFD, (struct sockaddr *)&poole_server, sizeof(poole_server)) < 0)
   {
@@ -135,6 +131,118 @@ void createSocket()
    {
      write(1, "Waiting for connections...\n", strlen("Waiting for connections...\n"));
    }*/
+}
+
+SocketMessage processClient(int clientFD)
+{
+  // TODO: REMOVE PRINTF's
+  SocketMessage message;
+  // get the type
+  uint8_t type;
+  ssize_t bytesread = read(clientFD, &type, sizeof(type));
+  
+  if (bytesread == sizeof(type))
+  {
+    printf("Type: 0x%02x\n", type);
+  }
+  else
+  {
+    printf("Error reading type\n");
+  }
+
+  message.type = type;
+
+  // get the header length
+  uint16_t headerLength;
+  bytesread = read(clientFD, &headerLength, sizeof(headerLength));
+  headerLength = ntohs(headerLength); // Convert to host byte order
+  printf("Header length: %u\n", headerLength);
+  message.headerLength = headerLength;
+
+  // get the header
+  char *header = malloc(headerLength + 1);
+  read(clientFD, header, headerLength);
+  header[headerLength] = '\0';
+  printf("Header: %s\n", header);
+  message.header = header;
+  // free(header);
+
+  // get the data
+  char *data = malloc(255);
+  // char *data = readUntil(clientFD, '\0');
+  ssize_t dataBytesRead = read(clientFD, data, 255);
+  printf("Data bytes read: %ld\n", dataBytesRead);
+  data[dataBytesRead] = '\0';
+  printf("Data: %s\n", data);
+
+  message.data = data;
+  // free(data);
+
+  return message;
+}
+
+void connectToDiscovery()
+{
+  int socketFD;
+  struct sockaddr_in server;
+
+  if ((socketFD = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
+  {
+    printError("Error creating the socket\n");
+    exit(1);
+  }
+
+  bzero(&server, sizeof(server));
+  server.sin_family = AF_INET;
+  server.sin_port = htons(poole.firstPort);
+
+  // Convert IPv4 and IPv6 addresses from text to binary form
+  if (inet_pton(AF_INET, poole.firstIP, &server.sin_addr) < 0)
+  {
+    printError("Error configuring IP\n");
+  }
+  // Connect to server
+  if (connect(socketFD, (struct sockaddr *)&server, sizeof(server)) < 0)
+  {
+    printError("Error connecting\n");
+  }
+
+  // CONNECTED TO DISCOVERY
+  printToConsole("Connected to Discovery\n");
+  uint8_t type = 0x01;
+  write(socketFD, &type, 1);
+
+  // Send header length
+  uint16_t headerLength = strlen("NEW_POOLE");
+  headerLength = htons(headerLength); // Convert to network byte order
+  write(socketFD, &headerLength, sizeof(headerLength));
+
+  // Send header
+  write(socketFD, "NEW_POOLE", strlen("NEW_POOLE"));
+
+  // Send data
+  char *data;
+  printf("Servername: %s\n", poole.servername);
+  printf("IP: %s\n", poole.secondIP);
+  printf("Port: %d\n", poole.secondPort);
+  printf("Next is data\n");
+  if(asprintf(&data, "%s&%s", poole.servername, poole.secondIP)==-1){
+    printError("Error asprintf\n");
+  }
+
+  //asprintf(&data, "%s&%s&%d", poole.servername, poole.secondIP, poole.secondPort);
+  printf("Data: %s\n", data);
+  write(socketFD, data, strlen(data));
+  free(data);
+
+  //RECEIVE MESSAGE
+  SocketMessage message = processClient(socketFD);
+
+  // Check if the message is correct
+ 
+
+  free(message.header);
+  free(message.data);
 }
 
 int main(int argc, char *argv[])
@@ -164,7 +272,9 @@ int main(int argc, char *argv[])
   // THIS IS FOR PHASE 1 TESTING
   phaseOneTesting(poole);
 
-  createSocket();
+  connectToDiscovery();
+
+  // createSocket();
 
   freeMemory();
 

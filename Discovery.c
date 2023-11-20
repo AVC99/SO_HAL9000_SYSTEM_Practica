@@ -55,7 +55,7 @@ void closeProgram()
 
 SocketMessage processClient(int clientFD)
 {
-  //TODO: REMOVE PRINTF's
+  // TODO: REMOVE PRINTF's
   SocketMessage message;
   // get the type
   uint8_t type;
@@ -83,16 +83,25 @@ SocketMessage processClient(int clientFD)
   header[headerLength] = '\0';
   printf("Header: %s\n", header);
   message.header = header;
-  //free(header);
+  // free(header);
 
   // get the data
   char *data = malloc(sizeof(char) * 256);
   ssize_t dataBytesRead = read(clientFD, data, sizeof(data));
   printf("Data: %.*s\n", (int)dataBytesRead, data);
   message.data = data;
-  //free(data);
+  // free(data);
 
   return message;
+}
+
+void sendSocketMessage(int socketFD, SocketMessage message)
+{
+  write(socketFD, &message.type, sizeof(message.type));
+  uint16_t headerLength = htons(message.headerLength);
+  write(socketFD, &headerLength, sizeof(headerLength));
+  write(socketFD, message.header, message.headerLength);
+  write(socketFD, message.data, strlen(message.data));
 }
 
 void runDiscovery()
@@ -152,29 +161,33 @@ void runDiscovery()
     // GET SOCKET DATA
     SocketMessage message = processClient(clientFD);
 
-
     if (strcmp(message.header, "NEW_BOWMAN") == 0)
     {
-      printf("NEW_BOWMAN DETECTED\n");
+      printToConsole("NEW_BOWMAN DETECTED\n");
       SocketMessage response;
       response.type = 0x01;
       response.headerLength = strlen("CON_OK");
       response.header = "CON_OK";
-      response.data = "FUTURE_SERVER_NAME&FUTURE_SERVER_IP&FUTURE_SERVER_PORT";
+      response.data = "FUTURE_SERVER_NAME&FUTURE_SERVER_IP&FUTURE_SERVER_PORT\0";
 
-      write(clientFD, &response.type, sizeof(response.type));
-      uint16_t headerLength = htons(response.headerLength);
-      write(clientFD, &headerLength, sizeof(headerLength));
-      write(clientFD, response.header, response.headerLength);
-      write(clientFD, response.data, strlen(response.data));
+      sendSocketMessage(clientFD, response);
     }
-  
+    else if (strcmp(message.header, "NEW_POOLE") == 0)
+    {
+      printToConsole("NEW_POOLE DETECTED\n");
+      SocketMessage response;
+      response.type = 0x01;
+      response.headerLength = strlen("CON_OK");
+      response.header = "CON_OK";
+      response.data = "";
 
-    //TODO: CHECK WHEN I NEED TO FREE THIS MEMORY
-    // FREE MEMORY FROM MESSAGE
+      sendSocketMessage(clientFD, response);
+    }
+
+    // TODO: CHECK WHEN I NEED TO FREE THIS MEMORY
+    //  FREE MEMORY FROM MESSAGE
     free(message.header);
     free(message.data);
-
 
     close(clientFD);
   }

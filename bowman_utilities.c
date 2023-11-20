@@ -73,12 +73,12 @@ SocketMessage processClient(int clientFD)
 
   // get the data
   char *data = malloc(255);
-  ssize_t dataBytesRead = read(clientFD, data, sizeof(data));
+  //char *data = readUntil(clientFD, '\0');
+  ssize_t dataBytesRead = read(clientFD, data, 255);
   printf("Data bytes read: %ld\n", dataBytesRead);
    data[dataBytesRead] = '\0';
   printf("Data: %s\n", data);
 
- 
   message.data = data;
   //free(data);
 
