@@ -60,14 +60,14 @@ SocketMessage processClient(int clientFD)
   // get the type
   uint8_t type;
   ssize_t bytesread = read(clientFD, &type, sizeof(type));
-  /*if (bytesread == sizeof(type))
+  if (bytesread == sizeof(type))
   {
     printf("Type: 0x%02x\n", type);
   }
   else
   {
     printf("Error reading type\n");
-  }*/
+  }
   message.type = type;
 
   // get the header length
@@ -80,17 +80,18 @@ SocketMessage processClient(int clientFD)
   // get the header
   char *header = malloc(headerLength + 1);
   read(clientFD, header, headerLength);
-  header[headerLength] = '\0';
+  //header[headerLength] = '\0';
   printf("Header: %s\n", header);
   message.header = header;
-   free(header);
+   
 
   // get the data
   char *data = malloc(sizeof(char) * 256);
-  ssize_t dataBytesRead = read(clientFD, data, sizeof(data));
-  printf("Data: %.*s\n", (int)dataBytesRead, data);
+  ssize_t dataBytesRead = read(clientFD, data, 256);
+  printf("Data bytes read: %ld\n", dataBytesRead);
+  data[dataBytesRead] = '\0';
+  printf("Data: %s\n", data);
   message.data = data;
-  free(data);
 
   return message;
 }
@@ -100,6 +101,7 @@ void sendSocketMessage(int socketFD, SocketMessage message)
   write(socketFD, &message.type, sizeof(message.type));
   uint16_t headerLength = htons(message.headerLength);
   write(socketFD, &headerLength, sizeof(headerLength));
+  printf("Header length: %u\n", message.headerLength);
   write(socketFD, message.header, message.headerLength);
   write(socketFD, message.data, strlen(message.data));
 }
@@ -168,7 +170,7 @@ void runDiscovery()
       response.type = 0x01;
       response.headerLength = strlen("CON_OK");
       response.header = "CON_OK";
-      response.data = "FUTURE_SERVER_NAME&FUTURE_SERVER_IP&FUTURE_SERVER_PORT\0";
+      response.data = "FUTURE_SERVER_NAME&FUTURE_SERVER_IP&FUTURE_SERVER_PORT";
 
       sendSocketMessage(clientFD, response);
     }
@@ -179,7 +181,7 @@ void runDiscovery()
       response.type = 0x01;
       response.headerLength = strlen("CON_OK");
       response.header = "CON_OK";
-      response.data = "";
+      response.data = "SOMETHING";
 
       sendSocketMessage(clientFD, response);
     }

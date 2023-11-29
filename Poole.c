@@ -141,14 +141,14 @@ SocketMessage processClient(int clientFD)
   // get the type
   uint8_t type;
   ssize_t bytesread = read(clientFD, &type, sizeof(type));
-  
+
   if (bytesread == sizeof(type))
   {
-    //printf("Type: 0x%02x\n", type);
+     printf("Type: 0x%02x\n", type);
   }
   else
   {
-    //printf("Error reading type\n");
+     printf("Error reading type\n");
   }
 
   message.type = type;
@@ -166,19 +166,17 @@ SocketMessage processClient(int clientFD)
   header[headerLength] = '\0';
   printf("Header: %s\n", header);
   message.header = header;
-  free(header);
 
   // get the data
-  //char *data = malloc(256);
-  char *data = readUntil(clientFD, '\0');
+  char *data = malloc(255);
+  //char *data = readUntil(clientFD, '\n');
   ssize_t dataBytesRead = read(clientFD, data, 255);
   printf("Data bytes read: %ld\n", dataBytesRead);
   data[dataBytesRead] = '\0';
   printf("Data: %s\n", data);
 
   message.data = data;
-  // free(data);
-
+  
   return message;
 }
 
@@ -210,8 +208,10 @@ void connectToDiscovery()
 
   // CONNECTED TO DISCOVERY
   printToConsole("Connected to Discovery\n");
+
+  // SEND MESSAGE
   uint8_t type = 0x01;
-  write(socketFD, &type, strlen());
+  write(socketFD, &type, sizeof(type));
 
   // Send header length
   uint16_t headerLength = strlen("NEW_POOLE");
@@ -223,24 +223,18 @@ void connectToDiscovery()
 
   // Send data
   char *data;
-  //printf("Servername: %s\n", poole.servername);
-  //printf("IP: %s\n", poole.secondIP);
-  //printf("Port: %d\n", poole.secondPort);
-  //printf("Next is data\n");
-  if(asprintf(&data, "%s&%s", poole.servername, poole.secondIP)==-1){
-    printError("Error asprintf\n");
-  }
-    asprintf(&data, "%s&%s", poole.servername, poole.secondIP);
-  //asprintf(&data, "%s&%s&%d", poole.servername, poole.secondIP, poole.secondPort);
- // printf("Data: %s\n", data);
+  asprintf(&data, "%s&%s", poole.servername, poole.secondIP);
+  printToConsole(data);
+  // asprintf(&data, "%s&%s&%d", poole.servername, poole.secondIP, poole.secondPort);
+  printf("Data: %s\n", data);
   write(socketFD, data, strlen("127.0.0.1&Smyslov\n"));
+  printf("Data sent\n");
   free(data);
 
-  //RECEIVE MESSAGE
+  // RECEIVE MESSAGE
   SocketMessage message = processClient(socketFD);
 
   // Check if the message is correct
- 
 
   free(message.header);
   free(message.data);
