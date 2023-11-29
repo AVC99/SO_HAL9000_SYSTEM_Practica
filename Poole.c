@@ -26,6 +26,7 @@ Poole savePoole(int fd)
   write(1, "Reading configuration file...\n", strlen("Reading configuration file...\n"));
 
   poole.servername = readUntil('\n', fd);
+  poole.servername[strlen(poole.servername) - 1] = '\0';
 
   // check that the servername does not contain &
   if (strchr(poole.servername, '&') != NULL)
@@ -143,11 +144,11 @@ SocketMessage processClient(int clientFD)
   
   if (bytesread == sizeof(type))
   {
-    printf("Type: 0x%02x\n", type);
+    //printf("Type: 0x%02x\n", type);
   }
   else
   {
-    printf("Error reading type\n");
+    //printf("Error reading type\n");
   }
 
   message.type = type;
@@ -165,11 +166,11 @@ SocketMessage processClient(int clientFD)
   header[headerLength] = '\0';
   printf("Header: %s\n", header);
   message.header = header;
-  // free(header);
+  free(header);
 
   // get the data
-  char *data = malloc(255);
-  // char *data = readUntil(clientFD, '\0');
+  //char *data = malloc(256);
+  char *data = readUntil(clientFD, '\0');
   ssize_t dataBytesRead = read(clientFD, data, 255);
   printf("Data bytes read: %ld\n", dataBytesRead);
   data[dataBytesRead] = '\0';
@@ -210,7 +211,7 @@ void connectToDiscovery()
   // CONNECTED TO DISCOVERY
   printToConsole("Connected to Discovery\n");
   uint8_t type = 0x01;
-  write(socketFD, &type, 1);
+  write(socketFD, &type, strlen());
 
   // Send header length
   uint16_t headerLength = strlen("NEW_POOLE");
@@ -222,17 +223,17 @@ void connectToDiscovery()
 
   // Send data
   char *data;
-  printf("Servername: %s\n", poole.servername);
-  printf("IP: %s\n", poole.secondIP);
-  printf("Port: %d\n", poole.secondPort);
-  printf("Next is data\n");
+  //printf("Servername: %s\n", poole.servername);
+  //printf("IP: %s\n", poole.secondIP);
+  //printf("Port: %d\n", poole.secondPort);
+  //printf("Next is data\n");
   if(asprintf(&data, "%s&%s", poole.servername, poole.secondIP)==-1){
     printError("Error asprintf\n");
   }
-
+    asprintf(&data, "%s&%s", poole.servername, poole.secondIP);
   //asprintf(&data, "%s&%s&%d", poole.servername, poole.secondIP, poole.secondPort);
-  printf("Data: %s\n", data);
-  write(socketFD, data, strlen(data));
+ // printf("Data: %s\n", data);
+  write(socketFD, data, strlen("127.0.0.1&Smyslov\n"));
   free(data);
 
   //RECEIVE MESSAGE

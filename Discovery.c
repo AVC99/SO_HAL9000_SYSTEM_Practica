@@ -60,14 +60,14 @@ SocketMessage processClient(int clientFD)
   // get the type
   uint8_t type;
   ssize_t bytesread = read(clientFD, &type, sizeof(type));
-  if (bytesread == sizeof(type))
+  /*if (bytesread == sizeof(type))
   {
     printf("Type: 0x%02x\n", type);
   }
   else
   {
     printf("Error reading type\n");
-  }
+  }*/
   message.type = type;
 
   // get the header length
@@ -83,14 +83,14 @@ SocketMessage processClient(int clientFD)
   header[headerLength] = '\0';
   printf("Header: %s\n", header);
   message.header = header;
-  // free(header);
+   free(header);
 
   // get the data
   char *data = malloc(sizeof(char) * 256);
   ssize_t dataBytesRead = read(clientFD, data, sizeof(data));
   printf("Data: %.*s\n", (int)dataBytesRead, data);
   message.data = data;
-  // free(data);
+  free(data);
 
   return message;
 }
