@@ -80,10 +80,9 @@ SocketMessage processClient(int clientFD)
   // get the header
   char *header = malloc(headerLength + 1);
   read(clientFD, header, headerLength);
-  //header[headerLength] = '\0';
+  // header[headerLength] = '\0';
   printf("Header: %s\n", header);
   message.header = header;
-   
 
   // get the data
   char *data = malloc(sizeof(char) * 256);
@@ -98,12 +97,41 @@ SocketMessage processClient(int clientFD)
 
 void sendSocketMessage(int socketFD, SocketMessage message)
 {
-  write(socketFD, &message.type, sizeof(message.type));
+  char *buffer = malloc(sizeof(char) * 256);
+  buffer[0] = message.type;
+  buffer[1] = (message.headerLength & 0xFF);
+  buffer[2] = ((message.headerLength >> 8) & 0xFF);
+
+  for (int i = 0; i < message.headerLength; i++)
+  {
+    buffer[i + 3] = message.header[i];
+  }
+
+  size_t i;
+  int start_i = 3 + strlen(message.header);
+  for (i = 0; i < strlen(message.data) && message.data != NULL; i++)
+  {
+    buffer[i + start_i] = message.data[i];
+    printf("buffer[%ld] = %c\n", i + start_i, buffer[i + start_i]);
+  }
+
+  int start_j = strlen(message.data) + start_i;
+  for (int j = 0; j < 256 - start_j; j++)
+  {
+    buffer[j + start_j] = '%';
+    printf("buffer[%d] = %c\n", j + start_j, buffer[j + start_j]);
+  }
+
+  write(socketFD, buffer, 256);
+
+  //---------------------------------------------------------------------
+
+  /*write(socketFD, &message.type, sizeof(message.type));
   uint16_t headerLength = htons(message.headerLength);
   write(socketFD, &headerLength, sizeof(headerLength));
   printf("Header length: %u\n", message.headerLength);
   write(socketFD, message.header, message.headerLength);
-  write(socketFD, message.data, strlen(message.data));
+  write(socketFD, message.data, strlen(message.data));*/
 }
 
 void runDiscovery()
@@ -117,6 +145,8 @@ void runDiscovery()
     exit(1);
   }
 
+  printf("%s\n", discovery.firstIP);
+
   // configuring the server
   bzero(&server, sizeof(server));
   server.sin_port = htons(discovery.firstPort);
@@ -124,7 +154,7 @@ void runDiscovery()
   server.sin_addr.s_addr = inet_pton(AF_INET, discovery.firstIP, &server.sin_addr);
 
   // checking if the IP address is valid
-  if (inet_pton(AF_INET, discovery.firstIP, &server.sin_addr) <= 0)
+  if (inet_pton(AF_INET, discovery.firstIP, &server.sin_addr) < 0)
   {
     printError("Invalid IP address\n");
     exit(1);
@@ -181,7 +211,7 @@ void runDiscovery()
       response.type = 0x01;
       response.headerLength = strlen("CON_OK");
       response.header = "CON_OK";
-      response.data = "SOMETHING";
+      response.data = "";
 
       sendSocketMessage(clientFD, response);
     }

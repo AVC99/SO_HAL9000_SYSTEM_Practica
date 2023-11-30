@@ -140,43 +140,40 @@ SocketMessage processClient(int clientFD)
   SocketMessage message;
   // get the type
   uint8_t type;
-  ssize_t bytesread = read(clientFD, &type, sizeof(type));
+  ssize_t bytesread = read(clientFD, &type, 1);
 
   if (bytesread == sizeof(type))
   {
-     printf("Type: 0x%02x\n", type);
+    printf("Type: 0x%02x\n", type);
   }
   else
   {
-     printf("Error reading type\n");
+    printf("Error reading type\n");
   }
 
   message.type = type;
 
   // get the header length
   uint16_t headerLength;
-  bytesread = read(clientFD, &headerLength, sizeof(headerLength));
-  headerLength = ntohs(headerLength); // Convert to host byte order
+  bytesread = read(clientFD, &headerLength, sizeof(unsigned short));
   printf("Header length: %u\n", headerLength);
   message.headerLength = headerLength;
 
   // get the header
-  char *header = malloc(headerLength + 1);
+  char *header = malloc(sizeof(char) * headerLength + 1);
   read(clientFD, header, headerLength);
   header[headerLength] = '\0';
   printf("Header: %s\n", header);
   message.header = header;
 
   // get the data
-  char *data = malloc(255);
-  //char *data = readUntil(clientFD, '\n');
-  ssize_t dataBytesRead = read(clientFD, data, 255);
-  printf("Data bytes read: %ld\n", dataBytesRead);
-  data[dataBytesRead] = '\0';
-  printf("Data: %s\n", data);
+  char *data = readUntil('%', clientFD);
+  char *buffer;
+  asprintf(&buffer, "Data: %s\n", data);
+  printToConsole(buffer);
 
   message.data = data;
-  
+
   return message;
 }
 
