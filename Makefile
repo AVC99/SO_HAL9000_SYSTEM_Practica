@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -lpthread 
+CFLAGS = -Wall -Wextra 
 
 all: Bowman Poole Discovery
 
@@ -11,7 +11,7 @@ Poole: Poole.c io_utils.o network_utils.o
 Discovery: Discovery.c io_utils.o network_utils.o
 
 %: %.c
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^ -lpthread
 
 clean:
 	rm -vf *.o

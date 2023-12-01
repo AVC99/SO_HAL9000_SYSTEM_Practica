@@ -21,17 +21,64 @@ void sendSocketMessage(int socketFD, SocketMessage message)
   for (i = 0; i < strlen(message.data) && message.data != NULL; i++)
   {
     buffer[i + start_i] = message.data[i];
-     //printf("buffer[%ld] = %c\n", i + start_i, buffer[i + start_i]);
+    // printf("buffer[%ld] = %c\n", i + start_i, buffer[i + start_i]);
   }
 
   int start_j = strlen(message.data) + start_i;
   for (int j = 0; j < 256 - start_j; j++)
   {
     buffer[j + start_j] = '%';
-     //printf("buffer[%d] = %c\n", j + start_j, buffer[j + start_j]);
+    // printf("buffer[%d] = %c\n", j + start_j, buffer[j + start_j]);
   }
 
   write(socketFD, buffer, 256);
+}
+
+int createAndBindSocket(char *IP, int port)
+{
+  char *buffer;
+  asprintf(&buffer, "Creating socket on %s:%d\n", IP, port);
+  printToConsole(buffer);
+  free(buffer);
+
+  int socketFD;
+  struct sockaddr_in server;
+
+  if ((socketFD = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+  {
+    printError("Error creating the socket\n");
+    exit(1);
+  }
+
+  bzero(&server, sizeof(server));
+  server.sin_port = htons(port);
+  server.sin_family = AF_INET;
+  server.sin_addr.s_addr = inet_pton(AF_INET, IP, &server.sin_addr);
+
+  if (inet_pton(AF_INET, IP, &server.sin_addr) <= 0)
+  {
+    printError("Error converting the IP address\n");
+    exit(1);
+  }
+
+  printToConsole("Socket created\n");
+
+  if (bind(socketFD, (struct sockaddr *)&server, sizeof(server)) < 0)
+  {
+    printToConsole("HERE\n");
+    printError("Error binding the socket\n");
+    exit(1);
+  }
+
+  printToConsole("Socket binded\n");
+
+  if(listen(socketFD, 10) < 0)
+  {
+    printError("Error listening\n");
+    exit(1);
+  }
+
+  return socketFD;
 }
 
 SocketMessage getSocketMessage(int clientFD)

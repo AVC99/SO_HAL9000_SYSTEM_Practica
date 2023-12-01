@@ -6,6 +6,8 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <netdb.h>
+#include <arpa/inet.h>
 
 void sendSocketMessage(int socketFD, SocketMessage message);
 SocketMessage getSocketMessage(int clientFD);
+int createAndBindSocket(char *IP, int port);

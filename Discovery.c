@@ -54,57 +54,21 @@ void closeProgram()
   exit(0);
 }
 
-void listenToBowman()
+void *listenToBowman()
 {
 
   printToConsole("Listening to Bowman...\n");
 
-  int clientFD;
-  struct sockaddr_in server;
-
-  if ((listenBowmanFD = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
-  {
+  if((listenBowmanFD = createAndBindSocket(discovery.bowmanIP, discovery.bowmanPort)) < 0){
     printError("Error creating the socket\n");
-    exit(1);
-  }
-
-  printf("%s\n", discovery.bowmanIP);
-
-  // configuring the server
-  bzero(&server, sizeof(server));
-  server.sin_port = htons(discovery.poolePort);
-  server.sin_family = AF_INET;
-  server.sin_addr.s_addr = inet_pton(AF_INET, discovery.pooleIP, &server.sin_addr);
-
-  // checking if the IP address is valid
-  if (inet_pton(AF_INET, discovery.pooleIP, &server.sin_addr) < 0)
-  {
-    printError("Invalid IP address\n");
-    exit(1);
-  }
-
-  printToConsole("Socket created\n");
-  // checking if the port is valid
-  if (bind(listenBowmanFD, (struct sockaddr *)&server, sizeof(server)) < 0)
-  {
-    printError("Error while binding\n");
-    exit(1);
-  }
-
-  printToConsole("Socket binded\n");
-
-  // listening for connections
-  if (listen(listenBowmanFD, 10) < 0)
-  {
-    printError("Error while listening\n");
     exit(1);
   }
 
   while (1)
   {
-    printToConsole("\nWaiting for connections...\n");
+    printToConsole("\nWaiting for Bowman connections...\n");
 
-    clientFD = accept(listenBowmanFD, (struct sockaddr *)NULL, NULL);
+    int clientFD = accept(listenBowmanFD, (struct sockaddr *)NULL, NULL);
 
     if (clientFD < 0)
     {
@@ -154,9 +118,10 @@ void listenToBowman()
 
     close(clientFD);
   }
+  return NULL;
 }
 
-void listenToPoole()
+void *listenToPoole()
 {
   int clientFD;
   struct sockaddr_in server;
@@ -203,7 +168,7 @@ void listenToPoole()
 
   while (1)
   {
-    printToConsole("\nWaiting for connections...\n");
+    printToConsole("\nWaiting for Poole connections...\n");
 
     clientFD = accept(listenPooleFD, (struct sockaddr *)NULL, NULL);
 
@@ -257,10 +222,12 @@ void listenToPoole()
 
     close(clientFD);
   }
+  return NULL;
 }
 
 int main(int argc, char *argv[])
 {
+  pthread_t pooleThread, bowmanThread;
   // Reprogram the SIGINT signal
   signal(SIGINT, closeProgram);
 
@@ -279,9 +246,15 @@ int main(int argc, char *argv[])
 
   getDiscoveryFromFile(fd);
 
-  listenToPoole();
+  // Create the threads
+  pthread_create(&pooleThread, NULL, (void *)listenToPoole, NULL);
+  pthread_create(&bowmanThread, NULL, (void *)listenToBowman, NULL);
 
-  // listenToBowman();
+  pthread_join(pooleThread, NULL);
+  pthread_join(bowmanThread, NULL);
+  // listenToPoole();
+
+  //listenToBowman();
 
   freeMemory();
 
