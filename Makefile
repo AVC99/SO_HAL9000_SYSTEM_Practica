@@ -3,11 +3,12 @@ CFLAGS = -Wall -Wextra -lpthread
 
 all: Bowman Poole Discovery
 
+network_utils.o: network_utils.c 
 io_utils.o: io_utils.c 
-bowman_utilities.o: bowman_utilities.c bowman_utilities.h io_utils.h
-Bowman: Bowman.c bowman_utilities.o io_utils.o
-Poole: Poole.c io_utils.o
-Discovery: Discovery.c io_utils.o
+bowman_utilities.o: bowman_utilities.c bowman_utilities.h io_utils.h network_utils.h
+Bowman: Bowman.c bowman_utilities.o io_utils.o network_utils.o
+Poole: Poole.c io_utils.o network_utils.o
+Discovery: Discovery.c io_utils.o network_utils.o
 
 %: %.c
 	$(CC) $(CFLAGS) -o $@ $^

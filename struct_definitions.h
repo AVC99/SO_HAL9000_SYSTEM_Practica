@@ -23,18 +23,18 @@ typedef struct
 {
   char *servername;
   char *folder;
-  char *firstIP;
-  int firstPort;
-  char *secondIP;
-  int secondPort;
+  char *discoveryIP;
+  int discoveryPort;
+  char *pooleIP;
+  int poolePort;
 } Poole;
 
 typedef struct
 {
-  char *firstIP;
-  int firstPort;
-  char *secondIP;
-  int secondPort;
+  char *pooleIP;
+  int poolePort;
+  char *bowmanIP;
+  int bowmanPort;
 } Discovery;
 
 

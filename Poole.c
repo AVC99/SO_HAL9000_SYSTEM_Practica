@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "io_utils.h"
 #include "struct_definitions.h"
+#include "network_utils.h"
 
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -16,6 +17,7 @@
 #include <sys/ioctl.h>
 #include <netdb.h>
 #include <pthread.h>
+
 // arnau.vives joan.medina I3_6
 
 Poole poole;
@@ -47,13 +49,13 @@ Poole savePoole(int fd)
   }
 
   poole.folder = readUntil('\n', fd);
-  poole.firstIP = readUntil('\n', fd);
+  poole.discoveryIP = readUntil('\n', fd);
   char *port = readUntil('\n', fd);
-  poole.firstPort = atoi(port);
+  poole.discoveryPort = atoi(port);
   free(port);
-  poole.secondIP = readUntil('\n', fd);
+  poole.pooleIP = readUntil('\n', fd);
   port = readUntil('\n', fd);
-  poole.secondPort = atoi(port);
+  poole.poolePort = atoi(port);
   free(port);
 
   return poole;
@@ -69,16 +71,16 @@ void phaseOneTesting(Poole poole)
   asprintf(&buffer, "Folder - %s\n", poole.folder);
   write(1, buffer, strlen(buffer));
   free(buffer);
-  asprintf(&buffer, "First IP - %s\n", poole.firstIP);
+  asprintf(&buffer, "Discovery IP - %s\n", poole.discoveryIP);
   write(1, buffer, strlen(buffer));
   free(buffer);
-  asprintf(&buffer, "First Port - %d\n", poole.firstPort);
+  asprintf(&buffer, "Discovery Port - %d\n", poole.discoveryPort);
   write(1, buffer, strlen(buffer));
   free(buffer);
-  asprintf(&buffer, "Second IP - %s\n", poole.secondIP);
+  asprintf(&buffer, "Poole IP - %s\n", poole.pooleIP);
   write(1, buffer, strlen(buffer));
   free(buffer);
-  asprintf(&buffer, "Second Port - %d\n", poole.secondPort);
+  asprintf(&buffer, "Poole Port - %d\n", poole.poolePort);
   write(1, buffer, strlen(buffer));
   write(1, "\n", strlen("\n"));
   free(buffer);
@@ -88,8 +90,8 @@ void freeMemory()
 {
   free(poole.servername);
   free(poole.folder);
-  free(poole.firstIP);
-  free(poole.secondIP);
+  free(poole.discoveryIP);
+  free(poole.pooleIP);
 }
 
 void closeProgram()
@@ -109,11 +111,11 @@ void createSocket()
   }
 
   bzero(&poole_server, sizeof(poole_server));
-  poole_server.sin_port = htons(poole.firstPort);
+  poole_server.sin_port = htons(poole.discoveryPort);
   poole_server.sin_family = AF_INET;
-  poole_server.sin_addr.s_addr = inet_pton(AF_INET, poole.firstIP, &poole_server.sin_addr);
+  poole_server.sin_addr.s_addr = inet_pton(AF_INET, poole.discoveryIP, &poole_server.sin_addr);
 
-  if (inet_pton(AF_INET, poole.firstIP, (&poole_server.sin_addr)) != 1)
+  if (inet_pton(AF_INET, poole.discoveryIP, (&poole_server.sin_addr)) != 1)
   {
     printToConsole("Error converting the IP address\n");
     exit(1);
@@ -134,49 +136,6 @@ void createSocket()
    }*/
 }
 
-SocketMessage processClient(int clientFD)
-{
-  // TODO: REMOVE PRINTF's
-  SocketMessage message;
-  // get the type
-  uint8_t type;
-  ssize_t bytesread = read(clientFD, &type, 1);
-
-  if (bytesread == sizeof(type))
-  {
-    printf("Type: 0x%02x\n", type);
-  }
-  else
-  {
-    printf("Error reading type\n");
-  }
-
-  message.type = type;
-
-  // get the header length
-  uint16_t headerLength;
-  bytesread = read(clientFD, &headerLength, sizeof(unsigned short));
-  printf("Header length: %u\n", headerLength);
-  message.headerLength = headerLength;
-
-  // get the header
-  char *header = malloc(sizeof(char) * headerLength + 1);
-  read(clientFD, header, headerLength);
-  header[headerLength] = '\0';
-  printf("Header: %s\n", header);
-  message.header = header;
-
-  // get the data
-  char *data = readUntil('%', clientFD);
-  char *buffer;
-  asprintf(&buffer, "Data: %s\n", data);
-  printToConsole(buffer);
-
-  message.data = data;
-
-  return message;
-}
-
 void connectToDiscovery()
 {
   int socketFD;
@@ -190,10 +149,10 @@ void connectToDiscovery()
 
   bzero(&server, sizeof(server));
   server.sin_family = AF_INET;
-  server.sin_port = htons(poole.firstPort);
+  server.sin_port = htons(poole.discoveryPort);
 
   // Convert IPv4 and IPv6 addresses from text to binary form
-  if (inet_pton(AF_INET, poole.firstIP, &server.sin_addr) < 0)
+  if (inet_pton(AF_INET, poole.discoveryIP, &server.sin_addr) < 0)
   {
     printError("Error configuring IP\n");
   }
@@ -206,35 +165,33 @@ void connectToDiscovery()
   // CONNECTED TO DISCOVERY
   printToConsole("Connected to Discovery\n");
 
-  // SEND MESSAGE
-  uint8_t type = 0x01;
-  write(socketFD, &type, sizeof(type));
+  SocketMessage sending = {
+      .type = 0x01,
+      .headerLength = strlen("NEW_POOLE"),
+      .header = "NEW_POOLE",
+  };
 
-  // Send header length
-  uint16_t headerLength = strlen("NEW_POOLE");
-  headerLength = htons(headerLength); // Convert to network byte order
-  write(socketFD, &headerLength, sizeof(headerLength));
-
-  // Send header
-  write(socketFD, "NEW_POOLE", strlen("NEW_POOLE"));
-
-  // Send data
+  //MARK --------------------------------------------------------------------------------------
+  // IDK WHY IF I PUT THE PORT LAST IT DOESNT WORK
   char *data;
-  asprintf(&data, "%s&%s", poole.servername, poole.secondIP);
-  printToConsole(data);
-  // asprintf(&data, "%s&%s&%d", poole.servername, poole.secondIP, poole.secondPort);
-  printf("Data: %s\n", data);
-  write(socketFD, data, strlen("127.0.0.1&Smyslov\n"));
-  printf("Data sent\n");
+  asprintf(&data, "%s&%d&%s", poole.servername, poole.poolePort, poole.pooleIP);
+
+  sending.data = data;
+
+  sendSocketMessage(socketFD, sending);
   free(data);
+  //free(sending.header);
+  //free(sending.data);
 
   // RECEIVE MESSAGE
-  SocketMessage message = processClient(socketFD);
+  SocketMessage message = getSocketMessage(socketFD);
 
   // Check if the message is correct
 
   free(message.header);
   free(message.data);
+
+  close(socketFD);
 }
 
 int main(int argc, char *argv[])

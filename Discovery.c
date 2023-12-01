@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "io_utils.h"
 #include "struct_definitions.h"
+#include "network_utils.h"
 
 #include <stdio.h>
 #include <sys/socket.h>
@@ -13,7 +14,7 @@
 // arnau.vives joan.medina I3_6
 
 Discovery discovery;
-int listenFD;
+int listenPooleFD, listenBowmanFD;
 
 /**
  * Saves the discovery information from the file
@@ -21,13 +22,13 @@ int listenFD;
 void getDiscoveryFromFile(int fd)
 {
   printToConsole("Reading configuration file...\n");
-  discovery.firstIP = readUntil('\n', fd);
+  discovery.pooleIP = readUntil('\n', fd);
   char *firstPort = readUntil('\n', fd);
-  discovery.firstPort = atoi(firstPort);
+  discovery.poolePort = atoi(firstPort);
   free(firstPort);
-  discovery.secondIP = readUntil('\n', fd);
+  discovery.bowmanIP = readUntil('\n', fd);
   char *secondPort = readUntil('\n', fd);
-  discovery.secondPort = atoi(secondPort);
+  discovery.bowmanPort = atoi(secondPort);
   free(secondPort);
 
   close(fd);
@@ -38,10 +39,10 @@ void getDiscoveryFromFile(int fd)
  */
 void freeMemory()
 {
-  free(discovery.firstIP);
-  free(discovery.secondIP);
+  free(discovery.pooleIP);
+  free(discovery.bowmanIP);
 
-  close(listenFD);
+  close(listenPooleFD);
 }
 
 /**
@@ -53,108 +54,30 @@ void closeProgram()
   exit(0);
 }
 
-SocketMessage processClient(int clientFD)
+void listenToBowman()
 {
-  // TODO: REMOVE PRINTF's
-  SocketMessage message;
-  // get the type
-  uint8_t type;
-  ssize_t bytesread = read(clientFD, &type, sizeof(type));
-  if (bytesread == sizeof(type))
-  {
-    printf("Type: 0x%02x\n", type);
-  }
-  else
-  {
-    printf("Error reading type\n");
-  }
-  message.type = type;
 
-  // get the header length
-  uint16_t headerLength;
-  bytesread = read(clientFD, &headerLength, sizeof(headerLength));
-  headerLength = ntohs(headerLength); // Convert to host byte order
-  printf("Header length: %u\n", headerLength);
-  message.headerLength = headerLength;
+  printToConsole("Listening to Bowman...\n");
 
-  // get the header
-  char *header = malloc(headerLength + 1);
-  read(clientFD, header, headerLength);
-  // header[headerLength] = '\0';
-  printf("Header: %s\n", header);
-  message.header = header;
-
-  // get the data
-  char *data = malloc(sizeof(char) * 256);
-  ssize_t dataBytesRead = read(clientFD, data, 256);
-  printf("Data bytes read: %ld\n", dataBytesRead);
-  data[dataBytesRead] = '\0';
-  printf("Data: %s\n", data);
-  message.data = data;
-
-  return message;
-}
-
-void sendSocketMessage(int socketFD, SocketMessage message)
-{
-  char *buffer = malloc(sizeof(char) * 256);
-  buffer[0] = message.type;
-  buffer[1] = (message.headerLength & 0xFF);
-  buffer[2] = ((message.headerLength >> 8) & 0xFF);
-
-  for (int i = 0; i < message.headerLength; i++)
-  {
-    buffer[i + 3] = message.header[i];
-  }
-
-  size_t i;
-  int start_i = 3 + strlen(message.header);
-  for (i = 0; i < strlen(message.data) && message.data != NULL; i++)
-  {
-    buffer[i + start_i] = message.data[i];
-    printf("buffer[%ld] = %c\n", i + start_i, buffer[i + start_i]);
-  }
-
-  int start_j = strlen(message.data) + start_i;
-  for (int j = 0; j < 256 - start_j; j++)
-  {
-    buffer[j + start_j] = '%';
-    printf("buffer[%d] = %c\n", j + start_j, buffer[j + start_j]);
-  }
-
-  write(socketFD, buffer, 256);
-
-  //---------------------------------------------------------------------
-
-  /*write(socketFD, &message.type, sizeof(message.type));
-  uint16_t headerLength = htons(message.headerLength);
-  write(socketFD, &headerLength, sizeof(headerLength));
-  printf("Header length: %u\n", message.headerLength);
-  write(socketFD, message.header, message.headerLength);
-  write(socketFD, message.data, strlen(message.data));*/
-}
-
-void runDiscovery()
-{
   int clientFD;
   struct sockaddr_in server;
 
-  if ((listenFD = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
+  if ((listenBowmanFD = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
   {
     printError("Error creating the socket\n");
     exit(1);
   }
 
-  printf("%s\n", discovery.firstIP);
+  printf("%s\n", discovery.bowmanIP);
 
   // configuring the server
   bzero(&server, sizeof(server));
-  server.sin_port = htons(discovery.firstPort);
+  server.sin_port = htons(discovery.poolePort);
   server.sin_family = AF_INET;
-  server.sin_addr.s_addr = inet_pton(AF_INET, discovery.firstIP, &server.sin_addr);
+  server.sin_addr.s_addr = inet_pton(AF_INET, discovery.pooleIP, &server.sin_addr);
 
   // checking if the IP address is valid
-  if (inet_pton(AF_INET, discovery.firstIP, &server.sin_addr) < 0)
+  if (inet_pton(AF_INET, discovery.pooleIP, &server.sin_addr) < 0)
   {
     printError("Invalid IP address\n");
     exit(1);
@@ -162,7 +85,7 @@ void runDiscovery()
 
   printToConsole("Socket created\n");
   // checking if the port is valid
-  if (bind(listenFD, (struct sockaddr *)&server, sizeof(server)) < 0)
+  if (bind(listenBowmanFD, (struct sockaddr *)&server, sizeof(server)) < 0)
   {
     printError("Error while binding\n");
     exit(1);
@@ -171,7 +94,7 @@ void runDiscovery()
   printToConsole("Socket binded\n");
 
   // listening for connections
-  if (listen(listenFD, 10) < 0)
+  if (listen(listenBowmanFD, 10) < 0)
   {
     printError("Error while listening\n");
     exit(1);
@@ -181,7 +104,7 @@ void runDiscovery()
   {
     printToConsole("\nWaiting for connections...\n");
 
-    clientFD = accept(listenFD, (struct sockaddr *)NULL, NULL);
+    clientFD = accept(listenBowmanFD, (struct sockaddr *)NULL, NULL);
 
     if (clientFD < 0)
     {
@@ -191,7 +114,7 @@ void runDiscovery()
     printToConsole("\nNew client connected !\n");
 
     // GET SOCKET DATA
-    SocketMessage message = processClient(clientFD);
+    SocketMessage message = getSocketMessage(clientFD);
 
     if (strcmp(message.header, "NEW_BOWMAN") == 0)
     {
@@ -203,6 +126,10 @@ void runDiscovery()
       response.data = "FUTURE_SERVER_NAME&FUTURE_SERVER_IP&FUTURE_SERVER_PORT";
 
       sendSocketMessage(clientFD, response);
+
+      // TODO: CHECK WHEN I NEED TO FREE THIS MEMORY i got munmap_chunk(): invalid pointer
+      // free(response.header);
+      // free(response.data);
     }
     else if (strcmp(message.header, "NEW_POOLE") == 0)
     {
@@ -214,6 +141,113 @@ void runDiscovery()
       response.data = "";
 
       sendSocketMessage(clientFD, response);
+
+      // TODO: CHECK WHEN I NEED TO FREE THIS MEMORY i got munmap_chunk(): invalid pointer
+      // free(response.header);
+      // free(response.data);
+    }
+
+    // TODO: CHECK WHEN I NEED TO FREE THIS MEMORY
+    //  FREE MEMORY FROM MESSAGE
+    free(message.header);
+    free(message.data);
+
+    close(clientFD);
+  }
+}
+
+void listenToPoole()
+{
+  int clientFD;
+  struct sockaddr_in server;
+
+  printToConsole("Listening to Poole...\n");
+
+  if ((listenPooleFD = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
+  {
+    printError("Error creating the socket\n");
+    exit(1);
+  }
+
+  printf("%s\n", discovery.pooleIP);
+
+  // configuring the server
+  bzero(&server, sizeof(server));
+  server.sin_port = htons(discovery.poolePort);
+  server.sin_family = AF_INET;
+  server.sin_addr.s_addr = inet_pton(AF_INET, discovery.pooleIP, &server.sin_addr);
+
+  // checking if the IP address is valid
+  if (inet_pton(AF_INET, discovery.pooleIP, &server.sin_addr) < 0)
+  {
+    printError("Invalid IP address\n");
+    exit(1);
+  }
+
+  printToConsole("Socket created\n");
+  // checking if the port is valid
+  if (bind(listenPooleFD, (struct sockaddr *)&server, sizeof(server)) < 0)
+  {
+    printError("Error while binding\n");
+    exit(1);
+  }
+
+  printToConsole("Socket binded\n");
+
+  // listening for connections
+  if (listen(listenPooleFD, 10) < 0)
+  {
+    printError("Error while listening\n");
+    exit(1);
+  }
+
+  while (1)
+  {
+    printToConsole("\nWaiting for connections...\n");
+
+    clientFD = accept(listenPooleFD, (struct sockaddr *)NULL, NULL);
+
+    if (clientFD < 0)
+    {
+      printError("Error while accepting\n");
+      exit(1);
+    }
+    printToConsole("\nNew client connected !\n");
+
+    // GET SOCKET DATA
+    SocketMessage message = getSocketMessage(clientFD);
+
+    // THIS WILL NOT BE USED ANYMORE ITS BETTER TO FILTER FIRST BY MESSAGE TYPE FIRST
+
+    if (strcmp(message.header, "NEW_BOWMAN") == 0)
+    {
+      printToConsole("NEW_BOWMAN DETECTED\n");
+      SocketMessage response;
+      response.type = 0x01;
+      response.headerLength = strlen("CON_OK");
+      response.header = "CON_OK";
+      response.data = "FUTURE_SERVER_NAME&FUTURE_SERVER_IP&FUTURE_SERVER_PORT";
+
+      sendSocketMessage(clientFD, response);
+
+      // TODO: CHECK WHEN I NEED TO FREE THIS MEMORY i got munmap_chunk(): invalid pointer
+      // free(response.header);
+      // free(response.data);
+    }
+    else if (strcmp(message.header, "NEW_POOLE") == 0)
+    {
+      printToConsole("NEW_POOLE DETECTED\n");
+      SocketMessage response;
+      response.type = 0x01;
+      response.headerLength = strlen("CON_OK");
+      response.header = "CON_OK";
+      response.data = "";
+
+      sendSocketMessage(clientFD, response);
+
+      // TODO: CHECK WHEN I NEED TO FREE THIS MEMORY i got munmap_chunk(): invalid pointer
+      // free(response.header);
+      // free(response.data);
     }
 
     // TODO: CHECK WHEN I NEED TO FREE THIS MEMORY
@@ -245,7 +279,9 @@ int main(int argc, char *argv[])
 
   getDiscoveryFromFile(fd);
 
-  runDiscovery();
+  listenToPoole();
+
+  // listenToBowman();
 
   freeMemory();
 

@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "io_utils.h"
 #include "struct_definitions.h"
+#include "network_utils.h"
 
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -39,7 +40,7 @@ void freeUtilitiesBowman()
   free(bowman.ip);
 }
 
-SocketMessage processClient(int clientFD)
+/*SocketMessage processClient(int clientFD)
 {
   SocketMessage message;
   // get the type
@@ -79,7 +80,7 @@ SocketMessage processClient(int clientFD)
   message.data = data;
 
   return message;
-}
+}*/
 
 void connectToDiscovery()
 {
@@ -113,26 +114,26 @@ void connectToDiscovery()
   // CONNECTED TO DISCOVERY
   // send type
   printToConsole("Connected to Discovery\n");
-  uint8_t type = 0x01;
-  write(socketFD, &type, 1);
+  SocketMessage m;
+  m.type = 0x01;
+  m.headerLength = strlen("NEW_BOWMAN");
+  m.header = "NEW_BOWMAN";
+  m.data = bowman.username;
 
-  // Send header length
-  uint16_t headerLength = strlen("NEW_BOWMAN");
-  headerLength = htons(headerLength); // Convert to network byte order
-  write(socketFD, &headerLength, sizeof(headerLength));
+  sendSocketMessage(socketFD, m);
 
-  // Send header
-  write(socketFD, "NEW_BOWMAN", strlen("NEW_BOWMAN"));
+  //free(m.header);
+  //free(m.data);
 
-  //Send data
-  write(socketFD, bowman.username, strlen(bowman.username));
+ 
 
-  //TODO: Receive response ------------------------------------------------
-  SocketMessage message = processClient(socketFD);
+  // TODO: Receive response ------------------------------------------------
+  SocketMessage response = getSocketMessage(socketFD);
 
-  free(message.header);
-  free(message.data);
+  free(response.header);
+  free(response.data);
 
+  close(socketFD);
 }
 
 void listSongs()
