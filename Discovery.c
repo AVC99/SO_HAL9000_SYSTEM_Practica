@@ -14,7 +14,8 @@
 // arnau.vives joan.medina I3_6
 
 Discovery discovery;
-int listenPooleFD, listenBowmanFD;
+int listenPooleFD, listenBowmanFD, numPooleServers = 0;
+PooleServer *pooleServers;
 
 /**
  * Saves the discovery information from the file
@@ -43,6 +44,7 @@ void freeMemory()
   free(discovery.bowmanIP);
 
   close(listenPooleFD);
+  close(listenBowmanFD);
 }
 
 /**
@@ -54,12 +56,17 @@ void closeProgram()
   exit(0);
 }
 
+/**
+ * Opens a socket and binds it to the given ip and port
+ * Listens to posible bowman connections and redirects them to the less crowded poole
+ */
 void *listenToBowman()
 {
 
   printToConsole("Listening to Bowman...\n");
 
-  if((listenBowmanFD = createAndBindSocket(discovery.bowmanIP, discovery.bowmanPort)) < 0){
+  if ((listenBowmanFD = createAndBindSocket(discovery.bowmanIP, discovery.bowmanPort)) < 0)
+  {
     printError("Error creating the socket\n");
     exit(1);
   }
@@ -75,6 +82,7 @@ void *listenToBowman()
       printError("Error while accepting\n");
       exit(1);
     }
+
     printToConsole("\nNew client connected !\n");
 
     // GET SOCKET DATA
@@ -121,48 +129,18 @@ void *listenToBowman()
   return NULL;
 }
 
+/**
+ * Opens a socket and binds it to the given ip and port
+ * Listens to posible poole connections and adds them to the list of active poole servers
+ */
 void *listenToPoole()
 {
-  int clientFD;
-  struct sockaddr_in server;
 
   printToConsole("Listening to Poole...\n");
 
-  if ((listenPooleFD = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
+  if ((listenPooleFD = createAndBindSocket(discovery.pooleIP, discovery.poolePort)) < 0)
   {
     printError("Error creating the socket\n");
-    exit(1);
-  }
-
-  printf("%s\n", discovery.pooleIP);
-
-  // configuring the server
-  bzero(&server, sizeof(server));
-  server.sin_port = htons(discovery.poolePort);
-  server.sin_family = AF_INET;
-  server.sin_addr.s_addr = inet_pton(AF_INET, discovery.pooleIP, &server.sin_addr);
-
-  // checking if the IP address is valid
-  if (inet_pton(AF_INET, discovery.pooleIP, &server.sin_addr) < 0)
-  {
-    printError("Invalid IP address\n");
-    exit(1);
-  }
-
-  printToConsole("Socket created\n");
-  // checking if the port is valid
-  if (bind(listenPooleFD, (struct sockaddr *)&server, sizeof(server)) < 0)
-  {
-    printError("Error while binding\n");
-    exit(1);
-  }
-
-  printToConsole("Socket binded\n");
-
-  // listening for connections
-  if (listen(listenPooleFD, 10) < 0)
-  {
-    printError("Error while listening\n");
     exit(1);
   }
 
@@ -170,7 +148,7 @@ void *listenToPoole()
   {
     printToConsole("\nWaiting for Poole connections...\n");
 
-    clientFD = accept(listenPooleFD, (struct sockaddr *)NULL, NULL);
+    int clientFD = accept(listenPooleFD, (struct sockaddr *)NULL, NULL);
 
     if (clientFD < 0)
     {
@@ -184,35 +162,76 @@ void *listenToPoole()
 
     // THIS WILL NOT BE USED ANYMORE ITS BETTER TO FILTER FIRST BY MESSAGE TYPE FIRST
 
-    if (strcmp(message.header, "NEW_BOWMAN") == 0)
+    switch (message.type)
     {
-      printToConsole("NEW_BOWMAN DETECTED\n");
-      SocketMessage response;
-      response.type = 0x01;
-      response.headerLength = strlen("CON_OK");
-      response.header = "CON_OK";
-      response.data = "FUTURE_SERVER_NAME&FUTURE_SERVER_IP&FUTURE_SERVER_PORT";
+    case 0x01:
 
-      sendSocketMessage(clientFD, response);
+      if (strcmp(message.header, "NEW_POOLE") == 0)
+      {
+        printToConsole("NEW_POOLE DETECTED\n");
+        SocketMessage response;
+        response.type = 0x01;
+        response.headerLength = strlen("CON_OK");
+        response.header = "CON_OK";
+        response.data = "";
 
-      // TODO: CHECK WHEN I NEED TO FREE THIS MEMORY i got munmap_chunk(): invalid pointer
-      // free(response.header);
-      // free(response.data);
-    }
-    else if (strcmp(message.header, "NEW_POOLE") == 0)
-    {
-      printToConsole("NEW_POOLE DETECTED\n");
+        sendSocketMessage(clientFD, response);
+        // add the poole to the list of active poole servers
+        numPooleServers++;
+        // handle possible realloc errors
+        PooleServer *temp = realloc(pooleServers, sizeof(PooleServer) * numPooleServers);
+        if (temp == NULL)
+        {
+          printError("Error reallocating memory\n");
+          exit(1);
+        }
+        else
+        {
+          pooleServers = temp;
+          pooleServers->numOfBowmans = 0;
+
+          char *token = strtok(message.data, "&");
+          pooleServers[numPooleServers - 1].pooleServername = token;
+
+          token = strtok(NULL, "&");
+          pooleServers[numPooleServers - 1].poolePort = atoi(token);
+
+          token = strtok(NULL, "&");
+          pooleServers[numPooleServers - 1].pooleIP = strtok(message.data, "&");
+
+          printToConsole("Poole server added to the list\n");
+
+          printf("Poole server name: %s\n", pooleServers[numPooleServers - 1].pooleServername);
+          printf("Poole server port: %d\n", pooleServers[numPooleServers - 1].poolePort);
+          printf("Poole server ip: %s\n", pooleServers[numPooleServers - 1].pooleIP);
+        }
+      }
+      else
+      {
+        printError("ERROR: Can't establish connection\n");
+        SocketMessage response;
+        response.type = 0x01;
+        response.headerLength = strlen("CON_KO");
+        response.header = "CON_KO";
+        response.data = "";
+
+        sendSocketMessage(clientFD, response);
+      }
+
+      break;
+
+    default:
+
+      printError("Error: Wrong message type\n");
       SocketMessage response;
-      response.type = 0x01;
-      response.headerLength = strlen("CON_OK");
-      response.header = "CON_OK";
+      response.type = 0x07;
+      response.headerLength = strlen("UNKNOWN");
+      response.header = "UNKNOWN";
       response.data = "";
 
       sendSocketMessage(clientFD, response);
 
-      // TODO: CHECK WHEN I NEED TO FREE THIS MEMORY i got munmap_chunk(): invalid pointer
-      // free(response.header);
-      // free(response.data);
+      break;
     }
 
     // TODO: CHECK WHEN I NEED TO FREE THIS MEMORY
@@ -222,6 +241,7 @@ void *listenToPoole()
 
     close(clientFD);
   }
+
   return NULL;
 }
 
@@ -254,7 +274,7 @@ int main(int argc, char *argv[])
   pthread_join(bowmanThread, NULL);
   // listenToPoole();
 
-  //listenToBowman();
+  // listenToBowman();
 
   freeMemory();
 

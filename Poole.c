@@ -100,44 +100,75 @@ void closeProgram()
   exit(0);
 }
 
-void createSocket()
+void listenForBowmans()
 {
-  struct sockaddr_in poole_server;
+  int listenBowmanFD;
 
-  if ((listenFD = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
+  if (listenBowmanFD = createAndBindSocket(poole.pooleIP, poole.poolePort) < 0)
   {
-    write(1, "Error creating the socket\n", strlen("Error creating the socket\n"));
+    printError("Error creating the socket\n");
     exit(1);
   }
 
-  bzero(&poole_server, sizeof(poole_server));
-  poole_server.sin_port = htons(poole.discoveryPort);
-  poole_server.sin_family = AF_INET;
-  poole_server.sin_addr.s_addr = inet_pton(AF_INET, poole.discoveryIP, &poole_server.sin_addr);
-
-  if (inet_pton(AF_INET, poole.discoveryIP, (&poole_server.sin_addr)) != 1)
+  while (1)
   {
-    printToConsole("Error converting the IP address\n");
-    exit(1);
+    printToConsole("\nWaiting for Bowman connections...\n");
+
+    int clientFD = accept(listenBowmanFD, (struct sockaddr *)NULL, NULL);
+
+    if (clientFD < 0)
+    {
+      printError("Error while accepting\n");
+      exit(1);
+    }
+
+    printToConsole("Bowman connected\n");
+
+    SocketMessage message = getSocketMessage(clientFD);
+
+    switch (message.type)
+    {
+    case 0x01:
+      if (strcmp(message.header, "NEW_BOWMAN") == 0)
+      {
+        printToConsole("NEW_BOWMAN DETECTED\n");
+
+        SocketMessage response;
+        response.type = 0x01;
+        response.headerLength = strlen("CON_OK");
+        response.header = "CON_OK";
+        response.data = "";
+
+        sendSocketMessage(clientFD, response);
+
+        // should open a new thread to handle the bowman
+      }
+      else
+      {
+        printError("ERROR while connecting to Bowman\n");
+
+        SocketMessage response;
+        response.type = 0x01;
+        response.headerLength = strlen("CON_KO");
+        response.header = "CON_KO";
+        response.data = "";
+
+        sendSocketMessage(clientFD, response);
+      }
+      break;
+
+    default:
+      // TODO: HANDLE DEFAULT
+      break;
+    }
+
+    // HANDLE MESSAGE
   }
-  printToConsole("Socket created\n");
-
-  if (bind(listenFD, (struct sockaddr *)&poole_server, sizeof(poole_server)) < 0)
-  {
-    write(1, "Error binding the socket\n", strlen("Error binding the socket\n"));
-    exit(1);
-  }
-
-  write(1, "Socket binded\n", strlen("Socket binded\n"));
-
-  /*while(1)
-   {
-     write(1, "Waiting for connections...\n", strlen("Waiting for connections...\n"));
-   }*/
 }
 
 void connectToDiscovery()
 {
+  // TODO: REFACTOR THIS TO NEW METHODS
   int socketFD;
   struct sockaddr_in server;
 
@@ -171,8 +202,8 @@ void connectToDiscovery()
       .header = "NEW_POOLE",
   };
 
-  //MARK --------------------------------------------------------------------------------------
-  // IDK WHY IF I PUT THE PORT LAST IT DOESNT WORK
+  // MARK --------------------------------------------------------------------------------------
+  //  IDK WHY IF I PUT THE PORT LAST IT DOESNT WORK
   char *data;
   asprintf(&data, "%s&%d&%s", poole.servername, poole.poolePort, poole.pooleIP);
 
@@ -180,11 +211,29 @@ void connectToDiscovery()
 
   sendSocketMessage(socketFD, sending);
   free(data);
-  //free(sending.header);
-  //free(sending.data);
+  // free(sending.header);
+  // free(sending.data);
 
   // RECEIVE MESSAGE
   SocketMessage message = getSocketMessage(socketFD);
+
+  switch (message.type)
+  {
+  case 0x01:
+    if (strcmp(message.header, "CON_OK") == 0)
+    {
+      listenForBowmans();
+    }
+    else if (strcmp(message.header, "CON_KO") == 0)
+    {
+      printError("ERROR while connecting to Discovery\n");
+    }
+
+    break;
+
+  default:
+    break;
+  }
 
   // Check if the message is correct
 

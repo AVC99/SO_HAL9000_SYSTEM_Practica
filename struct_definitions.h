@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-typedef struct 
+typedef struct
 {
   uint8_t type;
   uint16_t headerLength;
@@ -37,5 +37,12 @@ typedef struct
   int bowmanPort;
 } Discovery;
 
+typedef struct
+{
+  int numOfBowmans;
+  int poolePort;
+  char *pooleIP;
+  char *pooleServername;
+} PooleServer;
 
 #endif // STRUCT_DEFINITIONS_H
