@@ -83,11 +83,11 @@ void connectToDiscovery()
 
   //free(m.header);
   //free(m.data);
-
- 
-
+  
   // Receive response ------------------------------------------------
   SocketMessage response = getSocketMessage(socketFD);
+
+  
 
   free(response.header);
   free(response.data);

@@ -53,10 +53,24 @@ int createAndBindSocket(char *IP, int port)
   bzero(&server, sizeof(server));
   server.sin_port = htons(port);
   server.sin_family = AF_INET;
-  server.sin_addr.s_addr = inet_pton(AF_INET, IP, &server.sin_addr);
+  ;
 
+  // Check if the IP is valid and if it failed to convert, check why
   if (inet_pton(AF_INET, IP, &server.sin_addr) <= 0)
   {
+    char *buffer;
+    asprintf(&buffer, "IP address: %s\n", IP);
+    printToConsole(buffer);
+    free(buffer);
+
+    if (inet_pton(AF_INET, IP, &server.sin_addr) == 0)
+    {
+      printError("inet_pton() failed: invalid address string\n");
+    }
+    else
+    {
+      printError("inet_pton() failed\n");
+    }
     printError("Error converting the IP address\n");
     exit(1);
   }
@@ -72,7 +86,7 @@ int createAndBindSocket(char *IP, int port)
 
   printToConsole("Socket binded\n");
 
-  if(listen(socketFD, 10) < 0)
+  if (listen(socketFD, 10) < 0)
   {
     printError("Error listening\n");
     exit(1);
@@ -83,32 +97,41 @@ int createAndBindSocket(char *IP, int port)
 
 SocketMessage getSocketMessage(int clientFD)
 {
-
+  char *buffer;
   SocketMessage message;
   // get the type
   uint8_t type;
   read(clientFD, &type, 1);
-  printf("Type: 0x%02x\n", type);
+  asprintf(&buffer, "Type: 0x%02x\n", type);
+  printToConsole(buffer);
+  free(buffer);
+  // printf("Type: 0x%02x\n", type);
   message.type = type;
 
   // get the header length
   uint16_t headerLength;
   read(clientFD, &headerLength, sizeof(unsigned short));
-  printf("Header length: %u\n", headerLength);
+  asprintf(&buffer, "Header length: %u\n", headerLength);
+  printToConsole(buffer);
+  free(buffer);
+  // printf("Header length: %u\n", headerLength);
   message.headerLength = headerLength;
 
   // get the header
   char *header = malloc(sizeof(char) * headerLength + 1);
   read(clientFD, header, headerLength);
   header[headerLength] = '\0';
-  printf("Header: %s\n", header);
+  asprintf(&buffer, "Header: %s\n", header);
+  printToConsole(buffer);
+  free(buffer);
+  // printf("Header: %s\n", header);
   message.header = header;
 
   // get the data
   char *data = readUntil('%', clientFD);
-  char *buffer;
   asprintf(&buffer, "Data: %s\n", data);
   printToConsole(buffer);
+  free(buffer);
 
   message.data = data;
 

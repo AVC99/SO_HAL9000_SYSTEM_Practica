@@ -91,13 +91,73 @@ void *listenToBowman()
     if (strcmp(message.header, "NEW_BOWMAN") == 0)
     {
       printToConsole("NEW_BOWMAN DETECTED\n");
-      SocketMessage response;
-      response.type = 0x01;
-      response.headerLength = strlen("CON_OK");
-      response.header = "CON_OK";
-      response.data = "FUTURE_SERVER_NAME&FUTURE_SERVER_IP&FUTURE_SERVER_PORT";
 
-      sendSocketMessage(clientFD, response);
+      if (numPooleServers == 0)
+      {
+        printError("ERROR: No poole servers available\n");
+        SocketMessage response;
+        response.type = 0x01;
+        response.headerLength = strlen("CON_KO");
+        response.header = "CON_KO";
+        response.data = "";
+
+        sendSocketMessage(clientFD, response);
+      }
+      else
+      {
+        char *buffer;
+        printToConsole("Sending bowman to the less crowded poole server\n");
+        int minBowmans = -1, lowestIndexPoole = -1;
+        asprintf(&buffer, "Number of poole servers: %d\n", numPooleServers);
+        printToConsole(buffer);
+        free(buffer);
+        asprintf(&buffer, "Poole server name: %s\n", pooleServers[0].pooleServername);
+        printToConsole(buffer);
+        free(buffer);
+
+
+        for (int i = 0; i <= numPooleServers; i++)
+        {
+
+          asprintf(&buffer, "Poole server name: %s\n", pooleServers[i].pooleServername);
+          printToConsole(buffer);
+          free(buffer);
+          if (pooleServers[i].numOfBowmans < minBowmans)
+          {
+            minBowmans = pooleServers[i].numOfBowmans;
+            lowestIndexPoole = i;
+          }
+        }
+
+        asprintf(&buffer, "Lowest index poole: %d\n", lowestIndexPoole);
+        printToConsole(buffer);
+        free(buffer);
+        asprintf(&buffer, "Poole server name: %s\n", pooleServers[lowestIndexPoole].pooleServername);
+        printToConsole(buffer);
+        free(buffer);
+        asprintf(&buffer, "Poole server port: %d\n", pooleServers[lowestIndexPoole].poolePort);
+        printToConsole(buffer);
+        free(buffer);
+        asprintf(&buffer, "Poole server ip: %s\n", pooleServers[lowestIndexPoole].pooleIP);
+        printToConsole(buffer);
+        free(buffer);
+
+        printToConsole("Poole server found\n");
+        SocketMessage response;
+        response.type = 0x01;
+        response.headerLength = strlen("CON_OK");
+        response.header = "CON_OK";
+
+        char *bufferr;
+        asprintf(&bufferr, "%s&%d&%s", pooleServers[lowestIndexPoole].pooleServername, pooleServers[lowestIndexPoole].poolePort, pooleServers[lowestIndexPoole].pooleIP);
+        response.data = bufferr;
+
+        printToConsole("PETAA\n");
+        sendSocketMessage(clientFD, response);
+
+        //???
+        // free(buffer);
+      }
 
       // TODO: CHECK WHEN I NEED TO FREE THIS MEMORY i got munmap_chunk(): invalid pointer
       // free(response.header);
@@ -160,7 +220,6 @@ void *listenToPoole()
     // GET SOCKET DATA
     SocketMessage message = getSocketMessage(clientFD);
 
-    // THIS WILL NOT BE USED ANYMORE ITS BETTER TO FILTER FIRST BY MESSAGE TYPE FIRST
 
     switch (message.type)
     {
@@ -178,6 +237,7 @@ void *listenToPoole()
         sendSocketMessage(clientFD, response);
         // add the poole to the list of active poole servers
         numPooleServers++;
+        printf("numPooleServers: %d\n", numPooleServers);
         // handle possible realloc errors
         PooleServer *temp = realloc(pooleServers, sizeof(PooleServer) * numPooleServers);
         if (temp == NULL)
@@ -187,6 +247,7 @@ void *listenToPoole()
         }
         else
         {
+          printf("numPooleServers: %d\n", numPooleServers - 1);
           pooleServers = temp;
           pooleServers->numOfBowmans = 0;
 
@@ -197,13 +258,23 @@ void *listenToPoole()
           pooleServers[numPooleServers - 1].poolePort = atoi(token);
 
           token = strtok(NULL, "&");
-          pooleServers[numPooleServers - 1].pooleIP = strtok(message.data, "&");
-
+          pooleServers[numPooleServers - 1].pooleIP = token;
+          
+          //???
+          //free(token);
           printToConsole("Poole server added to the list\n");
 
-          printf("Poole server name: %s\n", pooleServers[numPooleServers - 1].pooleServername);
-          printf("Poole server port: %d\n", pooleServers[numPooleServers - 1].poolePort);
-          printf("Poole server ip: %s\n", pooleServers[numPooleServers - 1].pooleIP);
+          char *buffer;
+          asprintf(&buffer, "Poole server name: %s\n", pooleServers[numPooleServers - 1].pooleServername);
+          printToConsole(buffer);
+          free(buffer);
+          asprintf(&buffer, "Poole server port: %d\n", pooleServers[numPooleServers - 1].poolePort);
+          printToConsole(buffer);
+          free(buffer);
+          asprintf(&buffer, "Poole server ip: %s\n", pooleServers[numPooleServers - 1].pooleIP);
+          printToConsole(buffer);
+          free(buffer);
+          
         }
       }
       else

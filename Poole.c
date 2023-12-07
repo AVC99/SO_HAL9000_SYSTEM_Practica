@@ -104,7 +104,7 @@ void listenForBowmans()
 {
   int listenBowmanFD;
 
-  if (listenBowmanFD = createAndBindSocket(poole.pooleIP, poole.poolePort) < 0)
+  if ((listenBowmanFD = createAndBindSocket(poole.pooleIP, poole.poolePort)) < 0)
   {
     printError("Error creating the socket\n");
     exit(1);
@@ -222,13 +222,13 @@ void connectToDiscovery()
   case 0x01:
     if (strcmp(message.header, "CON_OK") == 0)
     {
+      // FAILS HERE 
       listenForBowmans();
     }
     else if (strcmp(message.header, "CON_KO") == 0)
     {
       printError("ERROR while connecting to Discovery\n");
     }
-
     break;
 
   default:
