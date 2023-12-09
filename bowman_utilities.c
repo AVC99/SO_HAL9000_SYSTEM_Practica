@@ -40,54 +40,70 @@ void freeUtilitiesBowman()
   free(bowman.ip);
 }
 
+void connectToPoole(SocketMessage message)
+{
+  printToConsole("CONNECT TO POOLE\n");
+
+  char *token = strtok(message.data, "&");
+  char *serverName = strdup(token);
+
+  token = strtok(NULL, "&");
+  int severPort = atoi(token);
+
+  token = strtok(NULL, "&");
+  char *serverIP = strdup(token);
+
+  char *buffer;
+  asprintf(&buffer, "POOLE server name: %s\nServer port: %d\nServer IP: %s\n", serverName, severPort, serverIP);
+  printToConsole(buffer);
+  free(buffer);
+
+  int socketFD;
+
+  if ((socketFD = createAndConnectSocket(serverIP, severPort)) < 0)
+  {
+    printError("Error connecting to Poole\n");
+    exit(1);
+  }
+
+  // CONNECTED TO POOLE
+  printToConsole("Connected to Poole\n");
+
+}
 
 void connectToDiscovery()
 {
   printToConsole("CONNECT\n");
 
   int socketFD;
-  struct sockaddr_in server;
 
-  // Create socket
-  if ((socketFD = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
+  if ((socketFD = createAndConnectSocket(bowman.ip, bowman.port)) < 0)
   {
-    printError("Error creating the socket\n");
-  }
-
-  // configure server
-  bzero(&server, sizeof(server));
-  server.sin_family = AF_INET;
-  server.sin_port = htons(bowman.port);
-
-  // Convert IPv4 and IPv6 addresses from text to binary form
-  if (inet_pton(AF_INET, bowman.ip, &server.sin_addr) < 0)
-  {
-    printError("Error configuring IP\n");
-  }
-  // Connect to server
-  if (connect(socketFD, (struct sockaddr *)&server, sizeof(server)) < 0)
-  {
-    printError("Error connecting\n");
+    printError("Error connecting to Discovery\n");
+    exit(1);
   }
 
   // CONNECTED TO DISCOVERY
-  // send type
   printToConsole("Connected to Discovery\n");
+
   SocketMessage m;
   m.type = 0x01;
   m.headerLength = strlen("NEW_BOWMAN");
   m.header = "NEW_BOWMAN";
-  m.data = bowman.username;
+  m.data = strdup(bowman.username);
 
   sendSocketMessage(socketFD, m);
 
-  //free(m.header);
-  //free(m.data);
-  
-  // Receive response ------------------------------------------------
+  // When I free this it crashes and i get munmap_chunk(): invalid pointer
+  // free(m.header);
+  // free(m.data);
+
+  // Receive response
   SocketMessage response = getSocketMessage(socketFD);
 
-  
+  // handle response
+
+  connectToPoole(response);
 
   free(response.header);
   free(response.data);

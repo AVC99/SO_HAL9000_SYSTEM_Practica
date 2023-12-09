@@ -34,7 +34,56 @@ void sendSocketMessage(int socketFD, SocketMessage message)
   write(socketFD, buffer, 256);
 }
 
-int createAndBindSocket(char *IP, int port)
+int createAndConnectSocket(char *IP, int port){
+  char *buffer;
+  asprintf(&buffer, "Creating socket on %s:%d\n", IP, port);
+  printToConsole(buffer);
+  free(buffer);
+
+  int socketFD;
+  struct sockaddr_in server;
+
+  if ((socketFD = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
+  {
+    printError("Error creating the socket\n");
+    exit(1);
+  }
+
+  bzero(&server, sizeof(server));
+  server.sin_port = htons(port);
+  server.sin_family = AF_INET;
+
+  // Check if the IP is valid and if it failed to convert, check why
+  if (inet_pton(AF_INET, IP, &server.sin_addr) <= 0)
+  {
+    asprintf(&buffer, "IP address: %s\n", IP);
+    printToConsole(buffer);
+    free(buffer);
+
+    if (inet_pton(AF_INET, IP, &server.sin_addr) == 0)
+    {
+      printError("inet_pton() failed: invalid address string\n");
+    }
+    else
+    {
+      printError("inet_pton() failed\n");
+    }
+    printError("Error converting the IP address\n");
+    exit(1);
+  }
+
+  // Connect to server
+  if (connect(socketFD, (struct sockaddr *)&server, sizeof(server)) < 0)
+  {
+    printError("Error connecting\n");
+    exit(1);
+  }
+
+  return socketFD;
+}
+
+
+int createAndListenSocket(char *IP, int port)
 {
   char *buffer;
   asprintf(&buffer, "Creating socket on %s:%d\n", IP, port);
@@ -53,7 +102,6 @@ int createAndBindSocket(char *IP, int port)
   bzero(&server, sizeof(server));
   server.sin_port = htons(port);
   server.sin_family = AF_INET;
-  ;
 
   // Check if the IP is valid and if it failed to convert, check why
   if (inet_pton(AF_INET, IP, &server.sin_addr) <= 0)

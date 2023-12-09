@@ -10,12 +10,14 @@
 #include <netdb.h>
 #include <pthread.h>
 #include <arpa/inet.h>
+#include <limits.h>
 
 // arnau.vives joan.medina I3_6
 
 Discovery discovery;
 int listenPooleFD, listenBowmanFD, numPooleServers = 0;
 PooleServer *pooleServers;
+pthread_mutex_t mutex;
 
 /**
  * Saves the discovery information from the file
@@ -45,6 +47,8 @@ void freeMemory()
 
   close(listenPooleFD);
   close(listenBowmanFD);
+
+  pthread_mutex_destroy(&mutex);
 }
 
 /**
@@ -65,7 +69,7 @@ void *listenToBowman()
 
   printToConsole("Listening to Bowman...\n");
 
-  if ((listenBowmanFD = createAndBindSocket(discovery.bowmanIP, discovery.bowmanPort)) < 0)
+  if ((listenBowmanFD = createAndListenSocket(discovery.bowmanIP, discovery.bowmanPort)) < 0)
   {
     printError("Error creating the socket\n");
     exit(1);
@@ -107,18 +111,33 @@ void *listenToBowman()
       {
         char *buffer;
         printToConsole("Sending bowman to the less crowded poole server\n");
-        int minBowmans = -1, lowestIndexPoole = -1;
-        asprintf(&buffer, "Number of poole servers: %d\n", numPooleServers);
-        printToConsole(buffer);
-        free(buffer);
-        asprintf(&buffer, "Poole server name: %s\n", pooleServers[0].pooleServername);
+
+        // Lock the mutex before accessing the shared variable
+        pthread_mutex_lock(&mutex);
+        asprintf(&buffer, "BOWMAN Number of poole servers: %d\n", numPooleServers);
         printToConsole(buffer);
         free(buffer);
 
-
-        for (int i = 0; i <= numPooleServers; i++)
+        if (numPooleServers == 0)
         {
+          printError("ERROR: No poole servers available\n");
+          SocketMessage response;
+          response.type = 0x01;
+          response.headerLength = strlen("CON_KO");
+          response.header = "CON_KO";
+          response.data = "";
 
+          sendSocketMessage(clientFD, response);
+          break;
+        }
+
+        int minBowmans = INT_MAX, lowestIndexPoole = -1;
+
+        pthread_mutex_unlock(&mutex);
+
+        for (int i = 0; i < numPooleServers; i++)
+        {
+          pthread_mutex_lock(&mutex);
           asprintf(&buffer, "Poole server name: %s\n", pooleServers[i].pooleServername);
           printToConsole(buffer);
           free(buffer);
@@ -127,8 +146,10 @@ void *listenToBowman()
             minBowmans = pooleServers[i].numOfBowmans;
             lowestIndexPoole = i;
           }
+          pthread_mutex_unlock(&mutex);
         }
 
+        pthread_mutex_lock(&mutex);
         asprintf(&buffer, "Lowest index poole: %d\n", lowestIndexPoole);
         printToConsole(buffer);
         free(buffer);
@@ -152,8 +173,13 @@ void *listenToBowman()
         asprintf(&bufferr, "%s&%d&%s", pooleServers[lowestIndexPoole].pooleServername, pooleServers[lowestIndexPoole].poolePort, pooleServers[lowestIndexPoole].pooleIP);
         response.data = bufferr;
 
-        printToConsole("PETAA\n");
         sendSocketMessage(clientFD, response);
+
+        pooleServers[lowestIndexPoole].numOfBowmans++;
+        // pooleServers[lowestIndexPoole].bowmans = realloc(pooleServers[lowestIndexPoole].bowmans, sizeof(Bowman) * pooleServers[lowestIndexPoole].numOfBowmans);
+
+        // Unlock the mutex
+        pthread_mutex_unlock(&mutex);
 
         //???
         // free(buffer);
@@ -198,7 +224,7 @@ void *listenToPoole()
 
   printToConsole("Listening to Poole...\n");
 
-  if ((listenPooleFD = createAndBindSocket(discovery.pooleIP, discovery.poolePort)) < 0)
+  if ((listenPooleFD = createAndListenSocket(discovery.pooleIP, discovery.poolePort)) < 0)
   {
     printError("Error creating the socket\n");
     exit(1);
@@ -220,7 +246,6 @@ void *listenToPoole()
     // GET SOCKET DATA
     SocketMessage message = getSocketMessage(clientFD);
 
-
     switch (message.type)
     {
     case 0x01:
@@ -235,6 +260,9 @@ void *listenToPoole()
         response.data = "";
 
         sendSocketMessage(clientFD, response);
+        // Lock the mutex before accessing the shared variable
+        pthread_mutex_lock(&mutex);
+
         // add the poole to the list of active poole servers
         numPooleServers++;
         printf("numPooleServers: %d\n", numPooleServers);
@@ -247,21 +275,21 @@ void *listenToPoole()
         }
         else
         {
-          printf("numPooleServers: %d\n", numPooleServers - 1);
+          printf("numPooleServers INDEX: %d\n", numPooleServers - 1);
           pooleServers = temp;
           pooleServers->numOfBowmans = 0;
 
           char *token = strtok(message.data, "&");
-          pooleServers[numPooleServers - 1].pooleServername = token;
+          pooleServers[numPooleServers - 1].pooleServername = strdup(token);
 
           token = strtok(NULL, "&");
           pooleServers[numPooleServers - 1].poolePort = atoi(token);
 
           token = strtok(NULL, "&");
-          pooleServers[numPooleServers - 1].pooleIP = token;
-          
+          pooleServers[numPooleServers - 1].pooleIP = strdup(token);
+
           //???
-          //free(token);
+          // free(token);
           printToConsole("Poole server added to the list\n");
 
           char *buffer;
@@ -274,7 +302,6 @@ void *listenToPoole()
           asprintf(&buffer, "Poole server ip: %s\n", pooleServers[numPooleServers - 1].pooleIP);
           printToConsole(buffer);
           free(buffer);
-          
         }
       }
       else
@@ -304,6 +331,8 @@ void *listenToPoole()
 
       break;
     }
+    // Unlock the mutex before returning
+    pthread_mutex_unlock(&mutex);
 
     // TODO: CHECK WHEN I NEED TO FREE THIS MEMORY
     //  FREE MEMORY FROM MESSAGE
@@ -337,15 +366,16 @@ int main(int argc, char *argv[])
 
   getDiscoveryFromFile(fd);
 
+  // Initialize the mutex
+  pthread_mutex_init(&mutex, NULL);
+
   // Create the threads
   pthread_create(&pooleThread, NULL, (void *)listenToPoole, NULL);
   pthread_create(&bowmanThread, NULL, (void *)listenToBowman, NULL);
 
   pthread_join(pooleThread, NULL);
   pthread_join(bowmanThread, NULL);
-  // listenToPoole();
-
-  // listenToBowman();
+ 
 
   freeMemory();
 

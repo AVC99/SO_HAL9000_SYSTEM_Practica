@@ -10,4 +10,5 @@
 
 void sendSocketMessage(int socketFD, SocketMessage message);
 SocketMessage getSocketMessage(int clientFD);
-int createAndBindSocket(char *IP, int port);
+int createAndListenSocket(char *IP, int port);
+int createAndConnectSocket(char *IP, int port);

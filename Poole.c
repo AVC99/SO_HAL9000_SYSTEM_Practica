@@ -104,7 +104,7 @@ void listenForBowmans()
 {
   int listenBowmanFD;
 
-  if ((listenBowmanFD = createAndBindSocket(poole.pooleIP, poole.poolePort)) < 0)
+  if ((listenBowmanFD = createAndListenSocket(poole.pooleIP, poole.poolePort)) < 0)
   {
     printError("Error creating the socket\n");
     exit(1);
@@ -169,28 +169,13 @@ void listenForBowmans()
 void connectToDiscovery()
 {
   // TODO: REFACTOR THIS TO NEW METHODS
-  int socketFD;
-  struct sockaddr_in server;
 
-  if ((socketFD = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
+  int socketFD;
+
+  if ((socketFD = createAndConnectSocket(poole.discoveryIP, poole.discoveryPort)) < 0)
   {
     printError("Error creating the socket\n");
     exit(1);
-  }
-
-  bzero(&server, sizeof(server));
-  server.sin_family = AF_INET;
-  server.sin_port = htons(poole.discoveryPort);
-
-  // Convert IPv4 and IPv6 addresses from text to binary form
-  if (inet_pton(AF_INET, poole.discoveryIP, &server.sin_addr) < 0)
-  {
-    printError("Error configuring IP\n");
-  }
-  // Connect to server
-  if (connect(socketFD, (struct sockaddr *)&server, sizeof(server)) < 0)
-  {
-    printError("Error connecting\n");
   }
 
   // CONNECTED TO DISCOVERY
