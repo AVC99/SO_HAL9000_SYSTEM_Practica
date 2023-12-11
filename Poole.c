@@ -123,7 +123,7 @@ void closeProgram()
   exit(0);
 }
 
-void proccessBowmanMessage(SocketMessage message, int clientFD)
+int proccessBowmanMessage(SocketMessage message, int clientFD)
 {
   switch (message.type)
   {
@@ -198,36 +198,42 @@ void proccessBowmanMessage(SocketMessage message, int clientFD)
 
   default:
     printError("IDK WHAT MESSAGE IS THIS\n");
+    return TRUE;
     break;
   }
+  
+  return FALSE;
 }
 
 void *bowmanThreadHandler(void *arg)
 {
   int bowmanFD = *((int *)arg);
   free(arg);
+  int exit = FALSE
+  SocketMessage message;
 
   printToConsole("Bowman thread created\n");
   printToConsole("Listening for thread bowman messages...\n");
 
-  while (1)
+  while (exit == FALSE)
   {
+    bzero(&message, sizeof(message));
 
-    int clientFD = accept(bowmanFD, (struct sockaddr *)NULL, NULL);
+    /*int clientFD = accept(bowmanFD, (struct sockaddr *)NULL, NULL);
 
     if (clientFD < 0)
     {
       printError("Error while accepting\n");
       exit(1);
-    }
-    printToConsole("Accepting bowman message\n");
-    SocketMessage message = getSocketMessage(clientFD);
+    }*/
+     message = getSocketMessage(clientFD);
     printToConsole("Bowman message received\n");
 
-    proccessBowmanMessage(message, clientFD);
+    exit = proccessBowmanMessage(message, clientFD);
+    bzero(&message, sizeof(message));
 
-    free(message.header);
-    free(message.data);
+    /*free(message.header);
+    free(message.data);*/
   }
 
 
@@ -247,6 +253,7 @@ void listenForBowmans()
 
   while (1)
   {
+
     printToConsole("\nWaiting for Bowman connections...\n");
 
     int clientFD = accept(listenBowmanFD, (struct sockaddr *)NULL, NULL);
@@ -286,7 +293,7 @@ void listenForBowmans()
         // Open a thread for the bowman
         pthread_t bowmanThread;
         int *FDPointer = malloc(sizeof(int));
-        *FDPointer = listenBowmanFD;
+        *FDPointer = clientFD;
 
         if (pthread_create(&bowmanThread, NULL, bowmanThreadHandler, FDPointer) != 0)
         {
