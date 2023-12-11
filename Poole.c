@@ -22,13 +22,16 @@
 
 Poole poole;
 int listenFD;
+pthread_t *bowmanThreads;
+int *bowmanClientSockets;
+int bowmanThreadsCount = 0;
+pthread_mutex_t bowmanThreadsMutex, bowmanClientSocketsMutex;
 
 Poole savePoole(int fd)
 {
   write(1, "Reading configuration file...\n", strlen("Reading configuration file...\n"));
 
   poole.servername = readUntil('\n', fd);
-  poole.servername[strlen(poole.servername) - 1] = '\0';
 
   // check that the servername does not contain &
   if (strchr(poole.servername, '&') != NULL)
@@ -92,12 +95,144 @@ void freeMemory()
   free(poole.folder);
   free(poole.discoveryIP);
   free(poole.pooleIP);
+
+  free(bowmanClientSockets);
+
+  close(listenFD);
+}
+
+void closeThreads()
+{
+  for (int i = 0; i < bowmanThreadsCount; i++)
+  {
+    pthread_cancel(bowmanThreads[i]);
+  }
+}
+
+void destroyMutexes()
+{
+  pthread_mutex_destroy(&bowmanThreadsMutex);
+  pthread_mutex_destroy(&bowmanClientSocketsMutex);
 }
 
 void closeProgram()
 {
   freeMemory();
+  closeThreads();
+  destroyMutexes();
   exit(0);
+}
+
+void proccessBowmanMessage(SocketMessage message, int clientFD)
+{
+  switch (message.type)
+  {
+  case 0x02:
+    if (strcmp(message.header, "LIST_SONGS") == 0)
+    {
+      printToConsole("LIST SONGS\n");
+
+      SocketMessage response;
+      response.type = 0x02;
+      response.headerLength = strlen("SONGS_RESPONSE");
+      response.header = "SONGS_RESPONSE";
+      response.data = "song1&song2&song3";
+
+      sendSocketMessage(clientFD, response);
+    }
+    else if (strcmp(message.header, "LIST_PLAYLIST") == 0)
+    {
+      SocketMessage response;
+      response.type = 0x02;
+      response.headerLength = strlen("PLAYLIST_RESPONSE");
+      response.header = "PLAYLIST_RESPONSE";
+      response.data = "playlist1&playlist2&playlist3";
+
+      sendSocketMessage(clientFD, response);
+    }
+    else
+    {
+      printError("ERROR while connecting to Bowman\n");
+
+      SocketMessage response;
+      response.type = 0x01;
+      response.headerLength = strlen("CON_KO");
+      response.header = "CON_KO";
+      response.data = "";
+
+      sendSocketMessage(clientFD, response);
+    }
+    break;
+  case 0x03:
+    if (strcmp(message.header, "DOWNLOAD_SONG"))
+    {
+      char *buffer;
+      asprintf(&buffer, "DOWNLOAD_SONG %s\n", message.data);
+      printToConsole(buffer);
+      free(buffer);
+
+      SocketMessage response;
+      response.type = 0x03;
+      response.headerLength = strlen("DOWNLOAD_SONG_RESPONSE");
+      response.header = "DOWNLOAD_SONG_RESPONSE";
+      response.data = "song1data";
+
+      sendSocketMessage(clientFD, response);
+    }
+    else if (strcmp(message.header, "DOWNLOAD_PLAYLIST"))
+    {
+      char *buffer;
+      asprintf(&buffer, "DOWNLOAD_PLAYLIST %s\n", message.data);
+      printToConsole(buffer);
+      free(buffer);
+
+      SocketMessage response;
+      response.type = 0x03;
+      response.headerLength = strlen("DOWNLOAD_PLAYLIST_RESPONSE");
+      response.header = "DOWNLOAD_PLAYLIST_RESPONSE";
+      response.data = "playlist1data";
+
+      sendSocketMessage(clientFD, response);
+    }
+    break;
+
+  default:
+    printError("IDK WHAT MESSAGE IS THIS\n");
+    break;
+  }
+}
+
+void *bowmanThreadHandler(void *arg)
+{
+  int bowmanFD = *((int *)arg);
+  free(arg);
+
+  printToConsole("Bowman thread created\n");
+  printToConsole("Listening for thread bowman messages...\n");
+
+  while (1)
+  {
+
+    int clientFD = accept(bowmanFD, (struct sockaddr *)NULL, NULL);
+
+    if (clientFD < 0)
+    {
+      printError("Error while accepting\n");
+      exit(1);
+    }
+    printToConsole("Accepting bowman message\n");
+    SocketMessage message = getSocketMessage(clientFD);
+    printToConsole("Bowman message received\n");
+
+    proccessBowmanMessage(message, clientFD);
+
+    free(message.header);
+    free(message.data);
+  }
+
+
+
+  return NULL;
 }
 
 void listenForBowmans()
@@ -140,8 +275,39 @@ void listenForBowmans()
         response.data = "";
 
         sendSocketMessage(clientFD, response);
+        char *buffer;
+        asprintf(&buffer, "Bowman clientFD: %d\n", clientFD);
+        printToConsole(buffer);
+        free(buffer);
 
-        // should open a new thread to handle the bowman
+        //MARK: 
+        
+        //FIXME: THIS IS NOT WORKING
+        // Open a thread for the bowman
+        pthread_t bowmanThread;
+        int *FDPointer = malloc(sizeof(int));
+        *FDPointer = listenBowmanFD;
+
+        if (pthread_create(&bowmanThread, NULL, bowmanThreadHandler, FDPointer) != 0)
+        {
+          printError("Error creating bowman thread\n");
+          close(clientFD);
+          exit(1);
+        }
+
+        bowmanThreadsCount++;
+        pthread_mutex_lock(&bowmanThreadsMutex);
+        bowmanThreads = realloc(bowmanThreads, bowmanThreadsCount * sizeof(pthread_t));
+        bowmanThreads[bowmanThreadsCount - 1] = bowmanThread;
+        pthread_mutex_unlock(&bowmanThreadsMutex);
+        pthread_mutex_lock(&bowmanClientSocketsMutex);
+        bowmanClientSockets = realloc(bowmanClientSockets, bowmanThreadsCount * sizeof(int));
+        bowmanClientSockets[bowmanThreadsCount - 1] = listenBowmanFD;
+        pthread_mutex_unlock(&bowmanClientSocketsMutex);
+
+
+        free(message.header);
+        free(message.data);
       }
       else
       {
@@ -161,8 +327,6 @@ void listenForBowmans()
       // TODO: HANDLE DEFAULT
       break;
     }
-
-    // HANDLE MESSAGE
   }
 }
 
@@ -207,7 +371,6 @@ void connectToDiscovery()
   case 0x01:
     if (strcmp(message.header, "CON_OK") == 0)
     {
-      // FAILS HERE 
       listenForBowmans();
     }
     else if (strcmp(message.header, "CON_KO") == 0)
@@ -255,11 +418,13 @@ int main(int argc, char *argv[])
   // THIS IS FOR PHASE 1 TESTING
   phaseOneTesting(poole);
 
+  // initialize mutexes
+  pthread_mutex_init(&bowmanThreadsMutex, NULL);
+  pthread_mutex_init(&bowmanClientSocketsMutex, NULL);
+
   connectToDiscovery();
 
-  // createSocket();
-
-  freeMemory();
+  closeProgram();
 
   return 0;
 }

@@ -36,7 +36,7 @@ void sendSocketMessage(int socketFD, SocketMessage message)
 
 int createAndConnectSocket(char *IP, int port){
   char *buffer;
-  asprintf(&buffer, "Creating socket on %s:%d\n", IP, port);
+  asprintf(&buffer, "Creating and connecting socket on %s:%d\n", IP, port);
   printToConsole(buffer);
   free(buffer);
 

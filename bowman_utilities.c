@@ -22,16 +22,9 @@
 // arnau.vives joan.medina I3_6
 
 Bowman bowman;
+int pooleSocketFD, isPooleConnected = FALSE;
 
-void setBowman(Bowman newBowman)
-{
-  // Copy string data, including null terminator
-  bowman.username = strdup(newBowman.username);
-  bowman.folder = strdup(newBowman.folder);
-  bowman.ip = strdup(newBowman.ip);
 
-  bowman.port = newBowman.port;
-}
 
 void freeUtilitiesBowman()
 {
@@ -58,9 +51,7 @@ void connectToPoole(SocketMessage message)
   printToConsole(buffer);
   free(buffer);
 
-  int socketFD;
-
-  if ((socketFD = createAndConnectSocket(serverIP, severPort)) < 0)
+  if ((pooleSocketFD = createAndConnectSocket(serverIP, severPort)) < 0)
   {
     printError("Error connecting to Poole\n");
     exit(1);
@@ -69,14 +60,42 @@ void connectToPoole(SocketMessage message)
   // CONNECTED TO POOLE
   printToConsole("Connected to Poole\n");
 
+  SocketMessage m;
+  m.type = 0x01;
+  m.headerLength = strlen("NEW_BOWMAN");
+  m.header = "NEW_BOWMAN";
+  m.data = strdup(bowman.username);
+
+  sendSocketMessage(pooleSocketFD, m);
+
+  SocketMessage response = getSocketMessage(pooleSocketFD);
+
+  // handle response
+
+  if (response.type == 0x01 && strcmp(response.header, "CON_OK") == 0)
+  {
+    printToConsole("Bowman connected to Poole\n");
+    isPooleConnected = TRUE;
+  }
+  else
+  {
+    printToConsole("Bowman could not connect to Poole\n");
+    exit(1);
+  }
+
+  free(response.header);
+  free(response.data);  
+
+  free(serverName);
+
 }
 
 void connectToDiscovery()
 {
   printToConsole("CONNECT\n");
-
   int socketFD;
 
+  
   if ((socketFD = createAndConnectSocket(bowman.ip, bowman.port)) < 0)
   {
     printError("Error connecting to Discovery\n");
@@ -102,18 +121,39 @@ void connectToDiscovery()
   SocketMessage response = getSocketMessage(socketFD);
 
   // handle response
-
   connectToPoole(response);
 
   free(response.header);
   free(response.data);
 
   close(socketFD);
+  printToConsole("Disconnected from Discovery\n");
 }
 
 void listSongs()
 {
-  write(1, "LIST SONGS\n", strlen("LIST SONGS\n"));
+  printToConsole("LIST SONGS\n");
+  if (isPooleConnected == FALSE)
+  {
+    printError("You are not connected to Poole\n");
+    return;
+  }
+
+  SocketMessage m;
+  m.type = 0x02;
+  m.headerLength = strlen("LIST_SONGS");
+  m.header = "LIST_SONGS";
+  m.data = "";
+
+  sendSocketMessage(pooleSocketFD, m);
+  printToConsole("Message sent to Poole\n");
+
+  /*SocketMessage response = getSocketMessage(pooleSocketFD);
+
+  // handle response
+  free(response.header);
+  free(response.data);*/
+
 }
 void checkDownloads()
 {
@@ -139,4 +179,6 @@ void downloadFile(char *file)
 void logout()
 {
   printToConsole("THANKS FOR USING HAL 9000, see you soon, music lover!\n");
+
+  close(pooleSocketFD);
 }

@@ -46,4 +46,7 @@ typedef struct
   Bowman *bowmans;
 } PooleServer;
 
+#define TRUE 1
+#define FALSE 0
+
 #endif // STRUCT_DEFINITIONS_H

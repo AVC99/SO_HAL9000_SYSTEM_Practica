@@ -13,16 +13,19 @@
 void printToConsole(char *x)
 {
   write(1, x, strlen(x));
+  fflush(stdout);
 }
 
 void printError(char *x)
 {
   write(2, x, strlen(x));
+  fflush(stderr);
 }
 
 char *readUntil(char del, int fd)
 {
-  char *chain = malloc(sizeof(char));
+  
+  char *chain = malloc(sizeof(char) * 1);
   char c;
   int i = 0, n;
 
