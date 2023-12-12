@@ -1,4 +1,5 @@
 #define _GNU_SOURCE
+#define _POSIX_SOURCE
 #include "io_utils.h"
 #include "struct_definitions.h"
 #include "network_utils.h"
@@ -131,7 +132,7 @@ int proccessBowmanMessage(SocketMessage message, int clientFD)
   case 0x02:
     if (strcmp(message.header, "LIST_SONGS") == 0)
     {
-      // TODO: HERE GOES FORK AND EXEC
+      // FIXME: HERE GOES FORK AND EXEC
       int pipefd[2];
       if (pipe(pipefd) == -1)
       {
@@ -152,12 +153,33 @@ int proccessBowmanMessage(SocketMessage message, int clientFD)
         asprintf(&buffer, "FOLDER %s\n", poole.folder);
         printToConsole(buffer);
         free(buffer);
+        char *folder = malloc(strlen(poole.folder) * sizeof(char));
+        // remove the first char of the folder
+        for (size_t i = 0; i < strlen(poole.folder); i++)
+        {
+          folder[i] = poole.folder[i + 1];
+        }
+
+        folder[strlen(poole.folder) - 1] = '\0';
+        asprintf(&buffer, "FOLDER %s\n", folder);
+        printToConsole(buffer);
+        free(buffer);
         // CHILD
         close(pipefd[0]);
+
+        printToConsole("CHILD\n");
+        chdir(getenv("HOME"));
+        printToConsole("CHANGED TO HOME\n");
+        execlp("ls", "ls", NULL);
+        //FIXME: CHANGES THE DIRECTORY TO HOME BUT NOT TO THE POOLE FOLDER
+        if(chdir(folder) != 0) printError("Error while changing directory\n");
+        printToConsole("CHANGED TO POOLE FOLDER\n");
+        execlp("ls", "ls", NULL);
         dup2(pipefd[1], STDOUT_FILENO); // Redirect stdout to write end of pipe
         close(pipefd[1]);               // Close write end of pipe now that it's been duplicated
 
-        chdir(poole.folder);
+        // chdir(getenv("HOME"));
+        // chdir(poole.folder);
         execlp("ls", "ls", NULL);
         exit(1);
       }
