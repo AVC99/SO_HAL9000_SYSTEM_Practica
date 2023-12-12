@@ -105,7 +105,7 @@ void commandInterpreter()
           }
           else
           {
-            write(1, "Error: Missing arguments\n", strlen("Error: Missing arguments\n"));
+            write(2, "Error: Missing arguments\n", strlen("Error: Missing arguments\n"));
           }
         }
         else if (strcasecmp(token, "LIST") == 0)

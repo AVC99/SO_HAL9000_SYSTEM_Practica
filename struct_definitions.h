@@ -49,4 +49,7 @@ typedef struct
 #define TRUE 1
 #define FALSE 0
 
+#define CON_OK "CON_OK"
+#define DOWNLOAD_SONG "DOWNLOAD_SONG"
+
 #endif // STRUCT_DEFINITIONS_H

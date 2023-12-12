@@ -21,7 +21,7 @@
 // arnau.vives joan.medina I3_6
 
 Poole poole;
-//FIX: listenFD what is Bowman? Discovery?
+// FIX: listenFD what is Bowman? Discovery?
 int listenFD;
 pthread_t *bowmanThreads;
 int *bowmanClientSockets;
@@ -132,14 +132,64 @@ int proccessBowmanMessage(SocketMessage message, int clientFD)
     if (strcmp(message.header, "LIST_SONGS") == 0)
     {
       // TODO: HERE GOES FORK AND EXEC
+      int pipefd[2];
+      if (pipe(pipefd) == -1)
+      {
+        printError("Error while creating pipe\n");
+        exit(1);
+      }
 
-      SocketMessage response;
-      response.type = 0x02;
-      response.headerLength = strlen("SONGS_RESPONSE");
-      response.header = "SONGS_RESPONSE";
-      response.data = "song1&song2&song3";
+      pid_t pid = fork();
 
-      sendSocketMessage(clientFD, response);
+      if (pid < 0)
+      {
+        printError("Error while forking\n");
+        exit(1);
+      }
+      if (pid == 0)
+      {
+        char *buffer;
+        asprintf(&buffer, "FOLDER %s\n", poole.folder);
+        printToConsole(buffer);
+        free(buffer);
+        // CHILD
+        close(pipefd[0]);
+        dup2(pipefd[1], STDOUT_FILENO); // Redirect stdout to write end of pipe
+        close(pipefd[1]);               // Close write end of pipe now that it's been duplicated
+
+        chdir(poole.folder);
+        execlp("ls", "ls", NULL);
+        exit(1);
+      }
+      else
+      {
+        // PARENT
+        int status;
+        waitpid(pid, &status, 0);
+        close(pipefd[1]);
+
+        // IDK WHAT NUMBER TO PUT HERE
+        char *buffer = malloc((255 - 3 - strlen("SONGS_RESPONSE")) * sizeof(char));
+
+        ssize_t numRead = read(pipefd[0], message.data, sizeof(buffer) - 1);
+        if (numRead == -1)
+        {
+          printError("Error while reading from pipe\n");
+          exit(1);
+        }
+        message.data[numRead] = '\0';
+
+        SocketMessage response;
+        response.type = 0x02;
+        response.headerLength = strlen("SONGS_RESPONSE");
+        response.header = "SONGS_RESPONSE";
+        response.data = buffer;
+
+        sendSocketMessage(clientFD, response);
+
+        free(message.header);
+        free(message.data);
+      }
     }
     else if (strcmp(message.header, "LIST_PLAYLISTS") == 0)
     {
@@ -152,6 +202,9 @@ int proccessBowmanMessage(SocketMessage message, int clientFD)
       response.data = "playlist1&playlist2&playlist3";
 
       sendSocketMessage(clientFD, response);
+
+      free(message.header);
+      free(message.data);
     }
     else
     {
@@ -160,10 +213,13 @@ int proccessBowmanMessage(SocketMessage message, int clientFD)
       sendError(clientFD);
     }
     break;
+
   case 0x03:
-    if (strcmp(message.header, "DOWNLOAD_SONG"))
+  {
+    char *buffer;
+    if (strcmp(message.header, DOWNLOAD_SONG) == 0)
     {
-      char *buffer;
+
       asprintf(&buffer, "DOWNLOAD_SONG %s\n", message.data);
       printToConsole(buffer);
       free(buffer);
@@ -175,10 +231,12 @@ int proccessBowmanMessage(SocketMessage message, int clientFD)
       response.data = "song1data";
 
       sendSocketMessage(clientFD, response);
+
+      free(message.header);
+      free(message.data);
     }
-    else if (strcmp(message.header, "DOWNLOAD_PLAYLIST"))
+    else if (strcmp(message.header, "DOWNLOAD_PLAYLIST") == 0)
     {
-      char *buffer;
       asprintf(&buffer, "DOWNLOAD_PLAYLIST %s\n", message.data);
       printToConsole(buffer);
       free(buffer);
@@ -190,21 +248,27 @@ int proccessBowmanMessage(SocketMessage message, int clientFD)
       response.data = "playlist1data";
 
       sendSocketMessage(clientFD, response);
+
+      free(message.header);
+      free(message.data);
     }
     else
     {
       sendError(clientFD);
+      printError("ERROR while connecting to Bowman\n");
     }
     break;
+  }
 
   case 0x06:
-    if (strcmp(message.header, "EXIT")==0){
+    if (strcmp(message.header, "EXIT") == 0)
+    {
       printToConsole("EXIT DETECTED\n");
 
-      // HERE I RECIVE THE EXIT MESSAGE WITH USERNAME 
+      // HERE I RECIVE THE EXIT MESSAGE WITH USERNAME
       // I GUESS I HAVE TO SEND A MESSAGE TO DISCOVERY TO REMOVE THE BOWMAN
 
-      //MESSAGE FOR BOWMAN
+      // MESSAGE FOR BOWMAN
       SocketMessage response;
 
       response.type = 0x06;
@@ -214,10 +278,10 @@ int proccessBowmanMessage(SocketMessage message, int clientFD)
 
       sendSocketMessage(clientFD, response);
 
-      //MESSAGE FOR DISCOVERY
+      free(message.header);
+      free(message.data);
 
-      
-
+      // TODO: MESSAGE FOR DISCOVERY
 
       return TRUE;
     }

@@ -158,14 +158,61 @@ void listSongs()
   free(response.header);
   free(response.data);
 }
+
 void checkDownloads()
 {
-  write(1, "CHECK DOWNLOADS\n", strlen("CHECK DOWNLOADS\n"));
+  printToConsole("CHECK DOWNLOADS\n");
+
+  if (isPooleConnected == FALSE)
+  {
+    printError("You are not connected to Poole\n");
+    return;
+  }
+
+  SocketMessage m;
+  m.type = 0x02;
+  m.headerLength = strlen("CHECK_DOWNLOADS");
+  m.header = "CHECK_DOWNLOADS";
+  m.data = "";
+
+  sendSocketMessage(pooleSocketFD, m);
+  printToConsole("Message sent to Poole\n");
+
+  SocketMessage response = getSocketMessage(pooleSocketFD);
+
+  // SHOW THE SONGS IN THE CONSOLE
+
+  // handle response
+  free(response.header);
+  free(response.data);
 }
 
 void clearDownloads()
 {
-  write(1, "CLEAR DOWNLOADS\n", strlen("CLEAR DOWNLOADS\n"));
+  printToConsole("CLEAR DOWNLOADS\n");
+
+  if (isPooleConnected == FALSE)
+  {
+    printError("You are not connected to Poole\n");
+    return;
+  }
+
+  SocketMessage m;
+  m.type = 0x02;
+  m.headerLength = strlen("CLEAR_DOWNLOADS");
+  m.header = "CLEAR_DOWNLOADS";
+  m.data = "";
+
+  sendSocketMessage(pooleSocketFD, m);
+  printToConsole("Message sent to Poole\n");
+
+  SocketMessage response = getSocketMessage(pooleSocketFD);
+
+  // SHOW THE SONGS IN THE CONSOLE
+
+  // handle response
+  free(response.header);
+  free(response.data);
 }
 
 void listPlaylists()
@@ -194,11 +241,11 @@ void listPlaylists()
   // handle response
   free(response.header);
   free(response.data);
-
 }
 void downloadFile(char *file)
 {
   char *buffer;
+  printToConsole("HEREEE\n");
   asprintf(&buffer, "DOWNLOAD %s\n", file);
   printToConsole(buffer);
   free(buffer);
@@ -211,8 +258,8 @@ void downloadFile(char *file)
 
   SocketMessage m;
   m.type = 0x03;
-  m.headerLength = strlen("DOWNLOAD_SONG");
-  m.header = "DOWNLOAD_SONG";
+  m.headerLength = strlen(DOWNLOAD_SONG);
+  m.header = DOWNLOAD_SONG;
   m.data = strdup(file);
 
   sendSocketMessage(pooleSocketFD, m);
