@@ -367,7 +367,11 @@ int main(int argc, char *argv[])
   getDiscoveryFromFile(fd);
 
   // Initialize the mutex
-  pthread_mutex_init(&mutex, NULL);
+  if (pthread_mutex_init(&mutex, NULL) != 0)
+  {
+    printError("Error: Mutex init failed\n");
+    return 1;
+  }
 
   // Create the threads
   pthread_create(&pooleThread, NULL, (void *)listenToPoole, NULL);

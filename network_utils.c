@@ -27,6 +27,7 @@ void sendSocketMessage(int socketFD, SocketMessage message)
   int start_j = strlen(message.data) + start_i;
   for (int j = 0; j < 256 - start_j; j++)
   {
+
     buffer[j + start_j] = '%';
     // printf("buffer[%d] = %c\n", j + start_j, buffer[j + start_j]);
   }
@@ -176,7 +177,16 @@ SocketMessage getSocketMessage(int clientFD)
   message.header = header;
 
   // get the data
-  char *data = readUntil('%', clientFD);
+  char *data = malloc(sizeof(char) * 256 - 3 - headerLength + 1);
+  read(clientFD,data, 256 - 3 - headerLength);
+  // remove the '%' characters
+  for (int i = 0; i < 256 - 3 - headerLength; i++)
+  {
+    if (data[i] == '%')
+    {
+      data[i] = '\0';
+    }
+  }
   asprintf(&buffer, "Data: %s\n", data);
   printToConsole(buffer);
   free(buffer);
@@ -184,4 +194,13 @@ SocketMessage getSocketMessage(int clientFD)
   message.data = data;
 
   return message;
+}
+
+void sendError(int clientFD){
+  SocketMessage message;
+  message.type = 0x07;
+  message.headerLength = strlen("UNKNOWN");
+  message.header = "UNKNOWN";
+  message.data = "";
+  sendSocketMessage(clientFD, message);
 }

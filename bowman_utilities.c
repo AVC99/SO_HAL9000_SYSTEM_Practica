@@ -24,8 +24,6 @@
 Bowman bowman;
 int pooleSocketFD, isPooleConnected = FALSE;
 
-
-
 void freeUtilitiesBowman()
 {
   free(bowman.username);
@@ -66,6 +64,11 @@ void connectToPoole(SocketMessage message)
   m.header = "NEW_BOWMAN";
   m.data = strdup(bowman.username);
 
+  char *buffer2;
+  asprintf(&buffer2, "Bowman username: %s\n", bowman.username);
+  printToConsole(buffer2);
+  free(buffer2);
+
   sendSocketMessage(pooleSocketFD, m);
 
   SocketMessage response = getSocketMessage(pooleSocketFD);
@@ -84,10 +87,9 @@ void connectToPoole(SocketMessage message)
   }
 
   free(response.header);
-  free(response.data);  
+  free(response.data);
 
   free(serverName);
-
 }
 
 void connectToDiscovery()
@@ -95,7 +97,6 @@ void connectToDiscovery()
   printToConsole("CONNECT\n");
   int socketFD;
 
-  
   if ((socketFD = createAndConnectSocket(bowman.ip, bowman.port)) < 0)
   {
     printError("Error connecting to Discovery\n");
@@ -112,10 +113,10 @@ void connectToDiscovery()
   m.data = strdup(bowman.username);
 
   sendSocketMessage(socketFD, m);
-
-  // When I free this it crashes and i get munmap_chunk(): invalid pointer
-  // free(m.header);
-  // free(m.data);
+  // FIXME
+  //  When I free this it crashes and i get munmap_chunk(): invalid pointer
+  //  free(m.header);
+  //  free(m.data);
 
   // Receive response
   SocketMessage response = getSocketMessage(socketFD);
@@ -133,6 +134,7 @@ void connectToDiscovery()
 void listSongs()
 {
   printToConsole("LIST SONGS\n");
+
   if (isPooleConnected == FALSE)
   {
     printError("You are not connected to Poole\n");
@@ -148,12 +150,13 @@ void listSongs()
   sendSocketMessage(pooleSocketFD, m);
   printToConsole("Message sent to Poole\n");
 
-  /*SocketMessage response = getSocketMessage(pooleSocketFD);
+  SocketMessage response = getSocketMessage(pooleSocketFD);
+
+  // SHOW THE SONGS IN THE CONSOLE
 
   // handle response
   free(response.header);
-  free(response.data);*/
-
+  free(response.data);
 }
 void checkDownloads()
 {
@@ -167,18 +170,62 @@ void clearDownloads()
 
 void listPlaylists()
 {
-  write(1, "LIST PLAYLISTS\n", strlen("LIST PLAYLISTS\n"));
+  printToConsole("LIST PLAYLISTS\n");
+
+  if (isPooleConnected == FALSE)
+  {
+    printError("You are not connected to Poole\n");
+    return;
+  }
+
+  SocketMessage m;
+  m.type = 0x02;
+  m.headerLength = strlen("LIST_PLAYLISTS");
+  m.header = "LIST_PLAYLISTS";
+  m.data = "";
+
+  sendSocketMessage(pooleSocketFD, m);
+  printToConsole("Message sent to Poole\n");
+
+  SocketMessage response = getSocketMessage(pooleSocketFD);
+
+  // SHOW THE SONGS IN THE CONSOLE
+
+  // handle response
+  free(response.header);
+  free(response.data);
+
 }
 void downloadFile(char *file)
 {
+  char *buffer;
+  asprintf(&buffer, "DOWNLOAD %s\n", file);
+  printToConsole(buffer);
+  free(buffer);
 
-  write(1, "DOWNLOAD ", strlen("DOWNLOAD "));
-  write(1, file, strlen(file));
-  write(1, "\n", strlen("\n"));
+  if (isPooleConnected == FALSE)
+  {
+    printError("You are not connected to Poole\n");
+    return;
+  }
+
+  SocketMessage m;
+  m.type = 0x03;
+  m.headerLength = strlen("DOWNLOAD_SONG");
+  m.header = "DOWNLOAD_SONG";
+  m.data = strdup(file);
+
+  sendSocketMessage(pooleSocketFD, m);
+  printToConsole("Message sent to Poole\n");
+
+  SocketMessage response = getSocketMessage(pooleSocketFD);
+
+  // handle response
+  free(response.header);
+  free(response.data);
 }
 void logout()
 {
   printToConsole("THANKS FOR USING HAL 9000, see you soon, music lover!\n");
-
   close(pooleSocketFD);
 }

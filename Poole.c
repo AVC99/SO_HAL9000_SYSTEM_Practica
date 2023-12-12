@@ -21,6 +21,7 @@
 // arnau.vives joan.medina I3_6
 
 Poole poole;
+//FIX: listenFD what is Bowman? Discovery?
 int listenFD;
 pthread_t *bowmanThreads;
 int *bowmanClientSockets;
@@ -130,7 +131,7 @@ int proccessBowmanMessage(SocketMessage message, int clientFD)
   case 0x02:
     if (strcmp(message.header, "LIST_SONGS") == 0)
     {
-      printToConsole("LIST SONGS\n");
+      // TODO: HERE GOES FORK AND EXEC
 
       SocketMessage response;
       response.type = 0x02;
@@ -140,8 +141,10 @@ int proccessBowmanMessage(SocketMessage message, int clientFD)
 
       sendSocketMessage(clientFD, response);
     }
-    else if (strcmp(message.header, "LIST_PLAYLIST") == 0)
+    else if (strcmp(message.header, "LIST_PLAYLISTS") == 0)
     {
+
+      // TODO: HERE GOES FORK AND EXEC
       SocketMessage response;
       response.type = 0x02;
       response.headerLength = strlen("PLAYLIST_RESPONSE");
@@ -154,13 +157,7 @@ int proccessBowmanMessage(SocketMessage message, int clientFD)
     {
       printError("ERROR while connecting to Bowman\n");
 
-      SocketMessage response;
-      response.type = 0x01;
-      response.headerLength = strlen("CON_KO");
-      response.header = "CON_KO";
-      response.data = "";
-
-      sendSocketMessage(clientFD, response);
+      sendError(clientFD);
     }
     break;
   case 0x03:
@@ -194,14 +191,46 @@ int proccessBowmanMessage(SocketMessage message, int clientFD)
 
       sendSocketMessage(clientFD, response);
     }
+    else
+    {
+      sendError(clientFD);
+    }
+    break;
+
+  case 0x06:
+    if (strcmp(message.header, "EXIT")==0){
+      printToConsole("EXIT DETECTED\n");
+
+      // HERE I RECIVE THE EXIT MESSAGE WITH USERNAME 
+      // I GUESS I HAVE TO SEND A MESSAGE TO DISCOVERY TO REMOVE THE BOWMAN
+
+      //MESSAGE FOR BOWMAN
+      SocketMessage response;
+
+      response.type = 0x06;
+      response.headerLength = strlen("CON_OK");
+      response.header = "CON_OK";
+      response.data = "";
+
+      sendSocketMessage(clientFD, response);
+
+      //MESSAGE FOR DISCOVERY
+
+      
+
+
+      return TRUE;
+    }
+
     break;
 
   default:
     printError("IDK WHAT MESSAGE IS THIS\n");
+    sendError(clientFD);
     return TRUE;
     break;
   }
-  
+
   return FALSE;
 }
 
@@ -209,7 +238,8 @@ void *bowmanThreadHandler(void *arg)
 {
   int bowmanFD = *((int *)arg);
   free(arg);
-  int exit = FALSE
+
+  int exit = FALSE;
   SocketMessage message;
 
   printToConsole("Bowman thread created\n");
@@ -219,24 +249,15 @@ void *bowmanThreadHandler(void *arg)
   {
     bzero(&message, sizeof(message));
 
-    /*int clientFD = accept(bowmanFD, (struct sockaddr *)NULL, NULL);
-
-    if (clientFD < 0)
-    {
-      printError("Error while accepting\n");
-      exit(1);
-    }*/
-     message = getSocketMessage(clientFD);
+    message = getSocketMessage(bowmanFD);
     printToConsole("Bowman message received\n");
 
-    exit = proccessBowmanMessage(message, clientFD);
+    exit = proccessBowmanMessage(message, bowmanFD);
     bzero(&message, sizeof(message));
 
-    /*free(message.header);
-    free(message.data);*/
+    free(message.header);
+    free(message.data);
   }
-
-
 
   return NULL;
 }
@@ -287,10 +308,10 @@ void listenForBowmans()
         printToConsole(buffer);
         free(buffer);
 
-        //MARK: 
-        
-        //FIXME: THIS IS NOT WORKING
-        // Open a thread for the bowman
+        // MARK:
+
+        // FIXME: THIS IS NOT WORKING
+        //  Open a thread for the bowman
         pthread_t bowmanThread;
         int *FDPointer = malloc(sizeof(int));
         *FDPointer = clientFD;
@@ -311,7 +332,6 @@ void listenForBowmans()
         bowmanClientSockets = realloc(bowmanClientSockets, bowmanThreadsCount * sizeof(int));
         bowmanClientSockets[bowmanThreadsCount - 1] = listenBowmanFD;
         pthread_mutex_unlock(&bowmanClientSocketsMutex);
-
 
         free(message.header);
         free(message.data);
@@ -389,7 +409,7 @@ void connectToDiscovery()
   default:
     break;
   }
-
+  printToConsole("Discovery message received\n");
   // Check if the message is correct
 
   free(message.header);

@@ -17,4 +17,4 @@ clean:
 	rm -vf *.o
 
 clean_all: clean
-	rm -vf Bowman Poole Discovery valgrind-out.txt
+	rm -vf Bowman Poole Discovery *.txt

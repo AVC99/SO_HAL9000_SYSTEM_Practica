@@ -5,6 +5,7 @@
 #UNIGNORE DIRECTORIES 
 !*/
 
+*.o
 *.tar
 *.tar.gz
 *.pdf

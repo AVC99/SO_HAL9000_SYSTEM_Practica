@@ -12,3 +12,4 @@ void sendSocketMessage(int socketFD, SocketMessage message);
 SocketMessage getSocketMessage(int clientFD);
 int createAndListenSocket(char *IP, int port);
 int createAndConnectSocket(char *IP, int port);
+void sendError(int clientFD);
