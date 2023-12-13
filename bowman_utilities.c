@@ -23,6 +23,7 @@
 
 Bowman bowman;
 int pooleSocketFD, isPooleConnected = FALSE;
+int discoverySocketFD;
 
 void freeUtilitiesBowman()
 {
@@ -61,7 +62,7 @@ void connectToPoole(SocketMessage message)
   SocketMessage m;
   m.type = 0x01;
   m.headerLength = strlen("NEW_BOWMAN");
-  m.header = "NEW_BOWMAN";
+  m.header = strdup("NEW_BOWMAN");
   m.data = strdup(bowman.username);
 
   char *buffer2;
@@ -95,9 +96,9 @@ void connectToPoole(SocketMessage message)
 void connectToDiscovery()
 {
   printToConsole("CONNECT\n");
-  int socketFD;
+  
 
-  if ((socketFD = createAndConnectSocket(bowman.ip, bowman.port)) < 0)
+  if ((discoverySocketFD = createAndConnectSocket(bowman.ip, bowman.port)) < 0)
   {
     printError("Error connecting to Discovery\n");
     exit(1);
@@ -109,17 +110,17 @@ void connectToDiscovery()
   SocketMessage m;
   m.type = 0x01;
   m.headerLength = strlen("NEW_BOWMAN");
-  m.header = "NEW_BOWMAN";
+  m.header = strdup("NEW_BOWMAN");
   m.data = strdup(bowman.username);
 
-  sendSocketMessage(socketFD, m);
+  sendSocketMessage(discoverySocketFD, m);
   // FIXME
   //  When I free this it crashes and i get munmap_chunk(): invalid pointer
   //  free(m.header);
   //  free(m.data);
 
   // Receive response
-  SocketMessage response = getSocketMessage(socketFD);
+  SocketMessage response = getSocketMessage(discoverySocketFD);
 
   // handle response
   connectToPoole(response);
@@ -127,8 +128,9 @@ void connectToDiscovery()
   free(response.header);
   free(response.data);
 
-  close(socketFD);
-  printToConsole("Disconnected from Discovery\n");
+  // ASK: IDK IF I SHOULD CLOSE THE SOCKET HERE
+  //close(socketFD);
+  //printToConsole("Disconnected from Discovery\n");
 }
 
 void listSongs()
@@ -144,8 +146,8 @@ void listSongs()
   SocketMessage m;
   m.type = 0x02;
   m.headerLength = strlen("LIST_SONGS");
-  m.header = "LIST_SONGS";
-  m.data = "";
+  m.header = strdup("LIST_SONGS");
+  m.data = strdup("");
 
   sendSocketMessage(pooleSocketFD, m);
   printToConsole("Message sent to Poole\n");
@@ -153,6 +155,19 @@ void listSongs()
   SocketMessage response = getSocketMessage(pooleSocketFD);
 
   // SHOW THE SONGS IN THE CONSOLE
+
+  for (size_t i = 0; i < strlen(response.data); i++)
+  {
+    if (response.data[i] == '&')
+    {
+      response.data[i] = '\n';
+    }
+  }
+
+  char *buffer;
+  asprintf(&buffer, "Songs in the Poole server:\n%s", response.data);
+  printToConsole(buffer);
+  free(buffer);
 
   // handle response
   free(response.header);
@@ -172,8 +187,8 @@ void checkDownloads()
   SocketMessage m;
   m.type = 0x02;
   m.headerLength = strlen("CHECK_DOWNLOADS");
-  m.header = "CHECK_DOWNLOADS";
-  m.data = "";
+  m.header = strdup("CHECK_DOWNLOADS");
+  m.data = strdup("");
 
   sendSocketMessage(pooleSocketFD, m);
   printToConsole("Message sent to Poole\n");
@@ -190,18 +205,18 @@ void checkDownloads()
 void clearDownloads()
 {
   printToConsole("CLEAR DOWNLOADS\n");
-
-  if (isPooleConnected == FALSE)
+  // I guess its not necessary to be connected to poole for this one
+  /*if (isPooleConnected == FALSE)
   {
     printError("You are not connected to Poole\n");
     return;
-  }
+  }*/
 
   SocketMessage m;
   m.type = 0x02;
   m.headerLength = strlen("CLEAR_DOWNLOADS");
-  m.header = "CLEAR_DOWNLOADS";
-  m.data = "";
+  m.header = strdup("CLEAR_DOWNLOADS");
+  m.data = strdup("");
 
   sendSocketMessage(pooleSocketFD, m);
   printToConsole("Message sent to Poole\n");
@@ -228,15 +243,15 @@ void listPlaylists()
   SocketMessage m;
   m.type = 0x02;
   m.headerLength = strlen("LIST_PLAYLISTS");
-  m.header = "LIST_PLAYLISTS";
-  m.data = "";
+  m.header = strdup("LIST_PLAYLISTS");
+  m.data = strdup("");
 
   sendSocketMessage(pooleSocketFD, m);
   printToConsole("Message sent to Poole\n");
 
   SocketMessage response = getSocketMessage(pooleSocketFD);
 
-  // SHOW THE SONGS IN THE CONSOLE
+  // SHOW THE PLAYLIST IN THE CONSOLE
 
   // handle response
   free(response.header);
@@ -271,8 +286,36 @@ void downloadFile(char *file)
   free(response.header);
   free(response.data);
 }
+
+/**
+ * this has to notify Poole that its disconnecting and close all connections
+ */
 void logout()
 {
+  if (isPooleConnected == TRUE)
+  {
+    SocketMessage m;
+    m.type = 0x06;
+    m.headerLength = strlen("EXIT");
+    m.header = strdup("EXIT");
+    m.data = bowman.username;
+
+    sendSocketMessage(pooleSocketFD, m);
+
+    SocketMessage response = getSocketMessage(pooleSocketFD);
+
+    if (response.type == 0x06 && strcmp(response.header, "CON_OK") == 0)
+    {
+      printToConsole("Bowman disconnected from Poole\n");
+      close(pooleSocketFD);
+      close(discoverySocketFD);
+      isPooleConnected = FALSE;
+    }
+    else
+    {
+      printToConsole("Bowman could not disconnect from Poole\n");
+    }
+  }
+
   printToConsole("THANKS FOR USING HAL 9000, see you soon, music lover!\n");
-  close(pooleSocketFD);
 }

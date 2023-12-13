@@ -128,7 +128,6 @@ int createAndListenSocket(char *IP, int port)
 
   if (bind(socketFD, (struct sockaddr *)&server, sizeof(server)) < 0)
   {
-    printToConsole("HERE\n");
     printError("Error binding the socket\n");
     exit(1);
   }

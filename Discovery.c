@@ -102,8 +102,8 @@ void *listenToBowman()
         SocketMessage response;
         response.type = 0x01;
         response.headerLength = strlen("CON_KO");
-        response.header = "CON_KO";
-        response.data = "";
+        response.header = strdup("CON_KO");
+        response.data = strdup("");
 
         sendSocketMessage(clientFD, response);
       }
@@ -124,8 +124,8 @@ void *listenToBowman()
           SocketMessage response;
           response.type = 0x01;
           response.headerLength = strlen("CON_KO");
-          response.header = "CON_KO";
-          response.data = "";
+          response.header = strdup("CON_KO");
+          response.data = strdup("");
 
           sendSocketMessage(clientFD, response);
           break;
@@ -167,7 +167,7 @@ void *listenToBowman()
         SocketMessage response;
         response.type = 0x01;
         response.headerLength = strlen("CON_OK");
-        response.header = "CON_OK";
+        response.header = strdup("CON_OK");
 
         char *bufferr;
         asprintf(&bufferr, "%s&%d&%s", pooleServers[lowestIndexPoole].pooleServername, pooleServers[lowestIndexPoole].poolePort, pooleServers[lowestIndexPoole].pooleIP);
@@ -195,14 +195,14 @@ void *listenToBowman()
       SocketMessage response;
       response.type = 0x01;
       response.headerLength = strlen("CON_OK");
-      response.header = "CON_OK";
-      response.data = "";
+      response.header = strdup("CON_OK");
+      response.data = strdup("");
 
       sendSocketMessage(clientFD, response);
 
       // TODO: CHECK WHEN I NEED TO FREE THIS MEMORY i got munmap_chunk(): invalid pointer
-      // free(response.header);
-      // free(response.data);
+       free(response.header);
+       free(response.data);
     }
 
     // TODO: CHECK WHEN I NEED TO FREE THIS MEMORY
@@ -256,8 +256,8 @@ void *listenToPoole()
         SocketMessage response;
         response.type = 0x01;
         response.headerLength = strlen("CON_OK");
-        response.header = "CON_OK";
-        response.data = "";
+        response.header = strdup("CON_OK");
+        response.data = strdup("");
 
         sendSocketMessage(clientFD, response);
         // Lock the mutex before accessing the shared variable
@@ -310,24 +310,28 @@ void *listenToPoole()
         SocketMessage response;
         response.type = 0x01;
         response.headerLength = strlen("CON_KO");
-        response.header = "CON_KO";
-        response.data = "";
+        response.header = strdup("CON_KO");
+        response.data = strdup("");
 
         sendSocketMessage(clientFD, response);
+
+        free(response.header);
+        free(response.data);
       }
 
+      break;
+
+    case 0x02:
+      if (strcmp(message.header, "REMOVE_BOWMAN"))
+      {
+        printToConsole("REMOVE_BOWMAN DETECTED\n");
+      }
       break;
 
     default:
 
       printError("Error: Wrong message type\n");
-      SocketMessage response;
-      response.type = 0x07;
-      response.headerLength = strlen("UNKNOWN");
-      response.header = "UNKNOWN";
-      response.data = "";
-
-      sendSocketMessage(clientFD, response);
+      sendError(clientFD);
 
       break;
     }
@@ -379,7 +383,6 @@ int main(int argc, char *argv[])
 
   pthread_join(pooleThread, NULL);
   pthread_join(bowmanThread, NULL);
- 
 
   freeMemory();
 

@@ -84,7 +84,6 @@ void commandInterpreter()
     if (strcasecmp(command, "CONNECT") == 0)
     {
       connectToDiscovery();
-      printToConsole("BACK TO COMMAND INTERPRETER\n");
     }
     else if (strcasecmp(command, "LOGOUT") == 0)
     {

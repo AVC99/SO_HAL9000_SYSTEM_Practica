@@ -22,7 +22,7 @@
 // arnau.vives joan.medina I3_6
 
 Poole poole;
-// FIX: listenFD what is Bowman? Discovery?
+// FIXME: listenFD what is Bowman? Discovery?
 int listenFD;
 pthread_t *bowmanThreads;
 int *bowmanClientSockets;
@@ -107,7 +107,9 @@ void closeThreads()
 {
   for (int i = 0; i < bowmanThreadsCount; i++)
   {
+    // JOIN OR CANCEL THREADS?
     pthread_cancel(bowmanThreads[i]);
+    // ptrhread_join(bowmanThreads[i], NULL);
   }
 }
 
@@ -125,6 +127,102 @@ void closeProgram()
   exit(0);
 }
 
+void listSongs(int clientFD)
+{
+  int pipefd[2];
+  if (pipe(pipefd) == -1)
+  {
+    printError("Error while creating pipe\n");
+    exit(1);
+  }
+
+  pid_t pid = fork();
+
+  if (pid < 0)
+  {
+    printError("Error while forking\n");
+    exit(1);
+  }
+  if (pid == 0)
+  {
+    // CHILD
+    char *buffer;
+    asprintf(&buffer, "FOLDER %s\n", poole.folder);
+    printToConsole(buffer);
+    free(buffer);
+
+    // REMOVE THE FIRST CHAR OF THE FOLDER
+    const char *folderPath = (poole.folder[0] == '/') ? (poole.folder + 1) : poole.folder;
+
+    asprintf(&buffer, "FOLDER %s\n", folderPath);
+    printToConsole(buffer);
+    free(buffer);
+
+    close(pipefd[0]);
+    dup2(pipefd[1], STDOUT_FILENO); // Redirect stdout to write end of pipe
+    close(pipefd[1]);               // Close write end of pipe now that it's been duplicated
+    chdir(getenv("HOME"));
+    if (chdir(folderPath) != 0)
+    {
+      printError("Error while changing directory\n");
+    }
+    execlp("ls", "ls", NULL);
+
+    // CODE SHOULD NOT REACH THIS POINT
+    printError("Error while executing ls\n");
+    exit(1);
+  }
+  else
+  {
+    // PARENT
+    int status;
+    waitpid(pid, &status, 0);
+
+    close(pipefd[1]);
+
+    // IDK WHAT NUMBER TO PUT HERE bcs this can be a lot of data
+    char *pipeBuffer = malloc(200 * sizeof(char));
+    ssize_t numRead = read(pipefd[0], pipeBuffer, 199);
+
+    if (numRead == -1)
+    {
+      printError("Error while reading from pipe\n");
+      exit(1);
+    }
+
+    for (ssize_t i = 0; i < numRead; i++)
+    {
+      if (pipeBuffer[i] == '\n')
+      {
+        pipeBuffer[i] = '&';
+      }
+    }
+
+    SocketMessage response;
+    response.type = 0x02;
+    response.headerLength = strlen("SONGS_RESPONSE");
+    response.header = strdup("SONGS_RESPONSE");
+    response.data = strdup(pipeBuffer);
+
+    sendSocketMessage(clientFD, response);
+  }
+}
+
+void download_song(char *song_name, int clientFD)
+{
+  char *buffer;
+  asprintf(&buffer, "DOWNLOAD_SONG %s\n", song_name);
+  printToConsole(buffer);
+
+  SocketMessage response;
+  response.type = 0x03;
+  response.headerLength = strlen("DOWNLOAD_SONG_RESPONSE");
+  response.header = strdup("DOWNLOAD_SONG_RESPONSE");
+  response.data = strdup("song1data");
+
+  sendSocketMessage(clientFD, response);
+}
+
 int proccessBowmanMessage(SocketMessage message, int clientFD)
 {
   switch (message.type)
@@ -132,96 +230,20 @@ int proccessBowmanMessage(SocketMessage message, int clientFD)
   case 0x02:
     if (strcmp(message.header, "LIST_SONGS") == 0)
     {
-      // FIXME: HERE GOES FORK AND EXEC
-      int pipefd[2];
-      if (pipe(pipefd) == -1)
-      {
-        printError("Error while creating pipe\n");
-        exit(1);
-      }
+      listSongs(clientFD);
 
-      pid_t pid = fork();
-
-      if (pid < 0)
-      {
-        printError("Error while forking\n");
-        exit(1);
-      }
-      if (pid == 0)
-      {
-        char *buffer;
-        asprintf(&buffer, "FOLDER %s\n", poole.folder);
-        printToConsole(buffer);
-        free(buffer);
-        char *folder = malloc(strlen(poole.folder) * sizeof(char));
-        // remove the first char of the folder
-        for (size_t i = 0; i < strlen(poole.folder); i++)
-        {
-          folder[i] = poole.folder[i + 1];
-        }
-
-        folder[strlen(poole.folder) - 1] = '\0';
-        asprintf(&buffer, "FOLDER %s\n", folder);
-        printToConsole(buffer);
-        free(buffer);
-        // CHILD
-        close(pipefd[0]);
-
-        printToConsole("CHILD\n");
-        chdir(getenv("HOME"));
-        printToConsole("CHANGED TO HOME\n");
-        execlp("ls", "ls", NULL);
-        //FIXME: CHANGES THE DIRECTORY TO HOME BUT NOT TO THE POOLE FOLDER
-        if(chdir(folder) != 0) printError("Error while changing directory\n");
-        printToConsole("CHANGED TO POOLE FOLDER\n");
-        execlp("ls", "ls", NULL);
-        dup2(pipefd[1], STDOUT_FILENO); // Redirect stdout to write end of pipe
-        close(pipefd[1]);               // Close write end of pipe now that it's been duplicated
-
-        // chdir(getenv("HOME"));
-        // chdir(poole.folder);
-        execlp("ls", "ls", NULL);
-        exit(1);
-      }
-      else
-      {
-        // PARENT
-        int status;
-        waitpid(pid, &status, 0);
-        close(pipefd[1]);
-
-        // IDK WHAT NUMBER TO PUT HERE
-        char *buffer = malloc((255 - 3 - strlen("SONGS_RESPONSE")) * sizeof(char));
-
-        ssize_t numRead = read(pipefd[0], message.data, sizeof(buffer) - 1);
-        if (numRead == -1)
-        {
-          printError("Error while reading from pipe\n");
-          exit(1);
-        }
-        message.data[numRead] = '\0';
-
-        SocketMessage response;
-        response.type = 0x02;
-        response.headerLength = strlen("SONGS_RESPONSE");
-        response.header = "SONGS_RESPONSE";
-        response.data = buffer;
-
-        sendSocketMessage(clientFD, response);
-
-        free(message.header);
-        free(message.data);
-      }
+      free(message.header);
+      free(message.data);
     }
     else if (strcmp(message.header, "LIST_PLAYLISTS") == 0)
     {
 
-      // TODO: HERE GOES FORK AND EXEC
+      // TODO: REPEAT THE SAME PROCESS AS LIST_SONGS BUT IDK WHAT IS A PLAYLIST IN THE CMD
       SocketMessage response;
       response.type = 0x02;
       response.headerLength = strlen("PLAYLIST_RESPONSE");
-      response.header = "PLAYLIST_RESPONSE";
-      response.data = "playlist1&playlist2&playlist3";
+      response.header = strdup("PLAYLIST_RESPONSE");
+      response.data = strdup("playlist1&playlist2&playlist3");
 
       sendSocketMessage(clientFD, response);
 
@@ -238,27 +260,18 @@ int proccessBowmanMessage(SocketMessage message, int clientFD)
 
   case 0x03:
   {
-    char *buffer;
+
     if (strcmp(message.header, DOWNLOAD_SONG) == 0)
     {
 
-      asprintf(&buffer, "DOWNLOAD_SONG %s\n", message.data);
-      printToConsole(buffer);
-      free(buffer);
-
-      SocketMessage response;
-      response.type = 0x03;
-      response.headerLength = strlen("DOWNLOAD_SONG_RESPONSE");
-      response.header = "DOWNLOAD_SONG_RESPONSE";
-      response.data = "song1data";
-
-      sendSocketMessage(clientFD, response);
+      download_song(message.data, clientFD);
 
       free(message.header);
       free(message.data);
     }
     else if (strcmp(message.header, "DOWNLOAD_PLAYLIST") == 0)
     {
+      char *buffer;
       asprintf(&buffer, "DOWNLOAD_PLAYLIST %s\n", message.data);
       printToConsole(buffer);
       free(buffer);
@@ -266,8 +279,8 @@ int proccessBowmanMessage(SocketMessage message, int clientFD)
       SocketMessage response;
       response.type = 0x03;
       response.headerLength = strlen("DOWNLOAD_PLAYLIST_RESPONSE");
-      response.header = "DOWNLOAD_PLAYLIST_RESPONSE";
-      response.data = "playlist1data";
+      response.header = strdup("DOWNLOAD_PLAYLIST_RESPONSE");
+      response.data = strdup("playlist1data");
 
       sendSocketMessage(clientFD, response);
 
@@ -295,15 +308,40 @@ int proccessBowmanMessage(SocketMessage message, int clientFD)
 
       response.type = 0x06;
       response.headerLength = strlen("CON_OK");
-      response.header = "CON_OK";
-      response.data = "";
+      response.header = strdup("CON_OK");
+      response.data = strdup("");
 
       sendSocketMessage(clientFD, response);
 
+      printToConsole("Bowman disconnected msg sent\n");
+      free(response.header);
+      free(response.data);
+
+      // FIXME: MESSAGE FOR DISCOVERY
+      bzero(&response, sizeof(response));
+
+      SocketMessage response2;
+      printToConsole("Sending message to Discovery\n");
+      response2.type = 0x02;
+      response2.headerLength = strlen("REMOVE_BOWMAN");
+      response2.header = strdup("REMOVE_BOWMAN");
+
+      /*int dataLength = strlen(message.data);
+      response.data[dataLength]='\0';*/
+
+      response2.data = strdup(message.data);
+
+      sendSocketMessage(dicoveryFD, response2);
+
+      printToConsole("Bowman disconnected msg sent to Discovery\n");
+
+      printToConsole("Bowman disconnected\n");
+
+      free(response.header);
+      free(response.data);
+
       free(message.header);
       free(message.data);
-
-      // TODO: MESSAGE FOR DISCOVERY
 
       return TRUE;
     }
@@ -333,7 +371,7 @@ void *bowmanThreadHandler(void *arg)
 
   while (exit == FALSE)
   {
-    bzero(&message, sizeof(message));
+    // bzero(&message, sizeof(message));
 
     message = getSocketMessage(bowmanFD);
     printToConsole("Bowman message received\n");
@@ -385,8 +423,8 @@ void listenForBowmans()
         SocketMessage response;
         response.type = 0x01;
         response.headerLength = strlen("CON_OK");
-        response.header = "CON_OK";
-        response.data = "";
+        response.header = strdup("CON_OK");
+        response.data = strdup("");
 
         sendSocketMessage(clientFD, response);
         char *buffer;
@@ -394,9 +432,6 @@ void listenForBowmans()
         printToConsole(buffer);
         free(buffer);
 
-        // MARK:
-
-        // FIXME: THIS IS NOT WORKING
         //  Open a thread for the bowman
         pthread_t bowmanThread;
         int *FDPointer = malloc(sizeof(int));
@@ -429,10 +464,13 @@ void listenForBowmans()
         SocketMessage response;
         response.type = 0x01;
         response.headerLength = strlen("CON_KO");
-        response.header = "CON_KO";
-        response.data = "";
+        response.header = strdup("CON_KO");
+        response.data = strdup("");
 
         sendSocketMessage(clientFD, response);
+
+        free(message.header);
+        free(message.data);
       }
       break;
 
@@ -461,7 +499,7 @@ void connectToDiscovery()
   SocketMessage sending = {
       .type = 0x01,
       .headerLength = strlen("NEW_POOLE"),
-      .header = "NEW_POOLE",
+      .header = strdup("NEW_POOLE"),
   };
 
   // MARK --------------------------------------------------------------------------------------
@@ -472,7 +510,9 @@ void connectToDiscovery()
   sending.data = data;
 
   sendSocketMessage(socketFD, sending);
+
   free(data);
+  // ASK: why no free?
   // free(sending.header);
   // free(sending.data);
 
@@ -536,6 +576,11 @@ int main(int argc, char *argv[])
   pthread_mutex_init(&bowmanClientSocketsMutex, NULL);
 
   connectToDiscovery();
+
+  for (int i = 0; i < bowmanThreadsCount; i++)
+  {
+    pthread_join(bowmanThreads[i], NULL);
+  }
 
   closeProgram();
 
