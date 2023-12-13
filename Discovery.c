@@ -201,8 +201,8 @@ void *listenToBowman()
       sendSocketMessage(clientFD, response);
 
       // TODO: CHECK WHEN I NEED TO FREE THIS MEMORY i got munmap_chunk(): invalid pointer
-       free(response.header);
-       free(response.data);
+      free(response.header);
+      free(response.data);
     }
 
     // TODO: CHECK WHEN I NEED TO FREE THIS MEMORY
@@ -325,6 +325,33 @@ void *listenToPoole()
       if (strcmp(message.header, "REMOVE_BOWMAN"))
       {
         printToConsole("REMOVE_BOWMAN DETECTED\n");
+
+        // Lock the mutex before accessing the shared variable
+        pthread_mutex_lock(&mutex);
+        for (int i = 0; i < numPooleServers; i++)
+        {
+          if (strcmp(pooleServers[i].pooleServername, message.data) == 0)
+          {
+
+            for (int j = 0; j < pooleServers[i].numOfBowmans; j++)
+            {
+              if (strcmp(pooleServers[i].bowmans[j].username, message.data) == 0)
+              {
+                for (int k = j; k < pooleServers[i].numOfBowmans - 1; k++)
+                {
+                  pooleServers[i].bowmans[k] = pooleServers[i].bowmans[k + 1];
+                }
+                pooleServers[i].bowmans = realloc(pooleServers[i].bowmans, sizeof(Bowman) * pooleServers[i].numOfBowmans);
+                break;
+              }
+              pooleServers[i].numOfBowmans--;
+            }
+            break;
+          }
+        }
+        // Unlock the mutex before returning
+        pthread_mutex_unlock(&mutex);
+
       }
       break;
 

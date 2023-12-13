@@ -161,7 +161,7 @@ void listSongs(int clientFD)
     close(pipefd[0]);
     dup2(pipefd[1], STDOUT_FILENO); // Redirect stdout to write end of pipe
     close(pipefd[1]);               // Close write end of pipe now that it's been duplicated
-    chdir(getenv("HOME"));
+
     if (chdir(folderPath) != 0)
     {
       printError("Error while changing directory\n");
@@ -300,7 +300,6 @@ int proccessBowmanMessage(SocketMessage message, int clientFD)
     {
       printToConsole("EXIT DETECTED\n");
 
-      // HERE I RECIVE THE EXIT MESSAGE WITH USERNAME
       // I GUESS I HAVE TO SEND A MESSAGE TO DISCOVERY TO REMOVE THE BOWMAN
 
       // MESSAGE FOR BOWMAN
@@ -325,13 +324,20 @@ int proccessBowmanMessage(SocketMessage message, int clientFD)
       response2.type = 0x02;
       response2.headerLength = strlen("REMOVE_BOWMAN");
       response2.header = strdup("REMOVE_BOWMAN");
-
+      
       /*int dataLength = strlen(message.data);
       response.data[dataLength]='\0';*/
 
       response2.data = strdup(message.data);
 
-      sendSocketMessage(dicoveryFD, response2);
+      int discoveryFD;
+      if ((discoveryFD = createAndConnectSocket(poole.discoveryIP, poole.discoveryPort)) < 0)
+      {
+        printError("Error creating the socket\n");
+        exit(1);
+      }
+
+      sendSocketMessage(discoveryFD, response2);
 
       printToConsole("Bowman disconnected msg sent to Discovery\n");
 
