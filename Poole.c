@@ -54,11 +54,14 @@ Poole savePoole(int fd)
   }
 
   poole.folder = readUntil('\n', fd);
+  poole.folder[strlen(poole.folder) - 1] = '\0';
   poole.discoveryIP = readUntil('\n', fd);
+  poole.discoveryIP[strlen(poole.discoveryIP) - 1] = '\0';
   char *port = readUntil('\n', fd);
   poole.discoveryPort = atoi(port);
   free(port);
   poole.pooleIP = readUntil('\n', fd);
+  poole.pooleIP[strlen(poole.pooleIP) - 1] = '\0';
   port = readUntil('\n', fd);
   poole.poolePort = atoi(port);
   free(port);
