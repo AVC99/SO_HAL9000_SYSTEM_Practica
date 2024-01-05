@@ -18,12 +18,14 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <stdint.h>
+#include <pthread.h>
 
 // arnau.vives joan.medina I3_6
 
 Bowman bowman;
 int pooleSocketFD, isPooleConnected = FALSE;
 int discoverySocketFD;
+pthread_t downloadThread;
 
 void freeUtilitiesBowman()
 {
@@ -129,8 +131,8 @@ void connectToDiscovery()
   free(response.data);
 
   // ASK: IDK IF I SHOULD CLOSE THE SOCKET HERE
-  //close(socketFD);
-  //printToConsole("Disconnected from Discovery\n");
+  close(discoverySocketFD);
+  printToConsole("Disconnected from Discovery\n");
 }
 
 void listSongs()
@@ -257,11 +259,17 @@ void listPlaylists()
   free(response.header);
   free(response.data);
 }
+
+void* dowloadSong(void *arg)
+{
+  free(arg);
+  return NULL;
+}
+
 void downloadFile(char *file)
 {
   char *buffer;
-  printToConsole("HEREEE\n");
-  asprintf(&buffer, "DOWNLOAD %s\n", file);
+  asprintf(&buffer, "DOWNLOAD started %s\n", file);
   printToConsole(buffer);
   free(buffer);
 
@@ -278,7 +286,11 @@ void downloadFile(char *file)
   m.data = strdup(file);
 
   sendSocketMessage(pooleSocketFD, m);
+  free(m.header);
+  free(m.data);
   printToConsole("Message sent to Poole\n");
+
+
 
   SocketMessage response = getSocketMessage(pooleSocketFD);
 

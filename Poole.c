@@ -18,16 +18,16 @@
 #include <sys/ioctl.h>
 #include <netdb.h>
 #include <pthread.h>
-
+#include <sys/stat.h>
 // arnau.vives joan.medina I3_6
 
 Poole poole;
 // FIXME: listenFD what is Bowman? Discovery?
 int listenFD;
-pthread_t *bowmanThreads;
+pthread_t *bowmanThreads, *downloadThreads;
 int *bowmanClientSockets;
 int bowmanThreadsCount = 0;
-pthread_mutex_t bowmanThreadsMutex, bowmanClientSocketsMutex;
+pthread_mutex_t bowmanThreadsMutex, bowmanClientSocketsMutex, downloadThreadsMutex;
 
 // FIXME: idk why this requires to comment the last char of the string and in Bowman and Discovery not
 void savePoole(int fd)
@@ -223,19 +223,80 @@ void listSongs(int clientFD)
   }
 }
 
+void *download_thread_handler(void *arg)
+{
+  free(arg);
+  return NULL;
+}
+
+/**
+ * Gets the file information and opens a thread to download it
+ */
 void download_song(char *song_name, int clientFD)
 {
   char *buffer;
   asprintf(&buffer, "DOWNLOAD_SONG %s\n", song_name);
   printToConsole(buffer);
+  free(buffer);
 
-  SocketMessage response;
-  response.type = 0x03;
-  response.headerLength = strlen("DOWNLOAD_SONG_RESPONSE");
-  response.header = strdup("DOWNLOAD_SONG_RESPONSE");
-  response.data = strdup("song1data");
+  char *song_path;
+  const char *folderPath = (poole.folder[0] == '/') ? (poole.folder + 1) : poole.folder;
+  asprintf(&song_path, "%s/%s", folderPath, song_name);
+  printToConsole(song_path);
 
-  sendSocketMessage(clientFD, response);
+  long long filesize = get_file_size(song_path);
+
+  char *md5sum = get_md5sum(song_path);
+
+  free(song_path);
+
+  if (filesize < 0 || !md5sum)
+  {
+    printError("Error while getting file stats\n");
+    sendError(clientFD);
+  }
+  else
+  {
+    printToConsole("File stats obtained\n");
+    asprintf(&buffer, "File size: %lld \n", filesize);
+    printToConsole(buffer);
+    free(buffer);
+    asprintf(&buffer, "MD5SUM: %s \n", md5sum);
+    printToConsole(buffer);
+    free(buffer);
+
+    // Check for asprintf errors
+    char *header;
+    if (asprintf(&header, "DOWNLOAD_SONG_RESPONSE") == -1)
+    {
+      printError("Error creating header\n");
+      exit(1);
+    }
+
+    char *data;
+    if (asprintf(&data, "%s&%lld&%s", song_name, filesize, md5sum) == -1)
+    {
+      printError("Error creating data\n");
+      exit(1);
+    }
+
+    // Send initial response
+
+    SocketMessage response;
+    response.type = 0x03;
+    response.headerLength = strlen(header);
+    response.header = strdup(header);
+    response.data = strdup(data);
+
+    sendSocketMessage(clientFD, response);
+
+    free(header);
+    free(data);
+    free(md5sum);
+
+    free(response.header);
+    free(response.data);
+  }
 }
 
 int proccessBowmanMessage(SocketMessage message, int clientFD)
@@ -528,16 +589,13 @@ void connectToDiscovery()
   char *data;
   asprintf(&data, "%s&%d&%s", poole.servername, poole.poolePort, poole.pooleIP);
 
-  sending.data = data;
+  sending.data = strdup(data);
+  free(data);
 
   sendSocketMessage(socketFD, sending);
 
-  free(data);
-  
   // RECEIVE MESSAGE
   SocketMessage message = getSocketMessage(socketFD);
-
-
 
   switch (message.type)
   {
@@ -556,14 +614,12 @@ void connectToDiscovery()
     break;
   }
   printToConsole("Discovery message received\n");
-  // Check if the message is correct
 
   free(message.header);
   free(message.data);
-  // ASK: why no free?
+
   free(sending.header);
   free(sending.data);
-
 
   close(socketFD);
 }

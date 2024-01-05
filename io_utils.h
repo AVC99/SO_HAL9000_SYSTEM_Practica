@@ -9,8 +9,11 @@
 #include <assert.h>
 #include <unistd.h>
 #include <time.h>
+#include <sys/stat.h>
 
 void printToConsole(char *x);
 void printError(char *x);
 char *readUntil(char del, int fd); 
 void printArray(char *array);
+char *get_md5sum(char *filename);
+long long get_file_size(char *filename);
