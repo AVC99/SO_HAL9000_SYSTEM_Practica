@@ -33,6 +33,7 @@ void sendSocketMessage(int socketFD, SocketMessage message)
   }
 
   write(socketFD, buffer, 256);
+  free(buffer);
 }
 
 int createAndConnectSocket(char *IP, int port){
@@ -153,7 +154,6 @@ SocketMessage getSocketMessage(int clientFD)
   asprintf(&buffer, "Type: 0x%02x\n", type);
   printToConsole(buffer);
   free(buffer);
-  // printf("Type: 0x%02x\n", type);
   message.type = type;
 
   // get the header length
@@ -162,7 +162,6 @@ SocketMessage getSocketMessage(int clientFD)
   asprintf(&buffer, "Header length: %u\n", headerLength);
   printToConsole(buffer);
   free(buffer);
-  // printf("Header length: %u\n", headerLength);
   message.headerLength = headerLength;
 
   // get the header
@@ -172,8 +171,8 @@ SocketMessage getSocketMessage(int clientFD)
   asprintf(&buffer, "Header: %s\n", header);
   printToConsole(buffer);
   free(buffer);
-  // printf("Header: %s\n", header);
-  message.header = header;
+  message.header = strdup(header);
+  free(header);
 
   // get the data
   char *data = malloc(sizeof(char) * 256 - 3 - headerLength + 1);
@@ -190,7 +189,8 @@ SocketMessage getSocketMessage(int clientFD)
   printToConsole(buffer);
   free(buffer);
 
-  message.data = data;
+  message.data = strdup(data);
+  free(data);
 
   return message;
 }

@@ -13,3 +13,4 @@
 void printToConsole(char *x);
 void printError(char *x);
 char *readUntil(char del, int fd); 
+void printArray(char *array);

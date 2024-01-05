@@ -29,16 +29,18 @@ int *bowmanClientSockets;
 int bowmanThreadsCount = 0;
 pthread_mutex_t bowmanThreadsMutex, bowmanClientSocketsMutex;
 
-Poole savePoole(int fd)
+// FIXME: idk why this requires to comment the last char of the string and in Bowman and Discovery not
+void savePoole(int fd)
 {
-  write(1, "Reading configuration file...\n", strlen("Reading configuration file...\n"));
-
   poole.servername = readUntil('\n', fd);
+  printArray(poole.servername);
+  // poole.servername[strlen(poole.servername) - 1] = '\0';
 
-  // check that the servername does not contain &
+  // check that the username does not contain &
   if (strchr(poole.servername, '&') != NULL)
   {
-    char *newServername = malloc(strlen(poole.servername) * sizeof(char));
+    printError("Error: Username contains &\n");
+    char *newServername = malloc((strlen(poole.servername) + 1) * sizeof(char));
     int j = 0;
     for (size_t i = 0; i < strlen(poole.servername); i++)
     {
@@ -50,23 +52,26 @@ Poole savePoole(int fd)
     }
     newServername[j] = '\0';
     free(poole.servername);
-    poole.servername = newServername;
+    poole.servername = strdup(newServername);
+    free(newServername);
   }
 
   poole.folder = readUntil('\n', fd);
-  poole.folder[strlen(poole.folder) - 1] = '\0';
-  poole.discoveryIP = readUntil('\n', fd);
-  poole.discoveryIP[strlen(poole.discoveryIP) - 1] = '\0';
-  char *port = readUntil('\n', fd);
-  poole.discoveryPort = atoi(port);
-  free(port);
-  poole.pooleIP = readUntil('\n', fd);
-  poole.pooleIP[strlen(poole.pooleIP) - 1] = '\0';
-  port = readUntil('\n', fd);
-  poole.poolePort = atoi(port);
-  free(port);
+  // poole.folder[strlen(poole.folder) - 1] = '\0';
 
-  return poole;
+  poole.discoveryIP = readUntil('\n', fd);
+  // poole.discoveryIP[strlen(poole.discoveryIP) - 1] = '\0';
+
+  char *firstPort = readUntil('\n', fd);
+  poole.discoveryPort = atoi(firstPort);
+  free(firstPort);
+
+  poole.pooleIP = readUntil('\n', fd);
+  // poole.pooleIP[strlen(poole.pooleIP) - 1] = '\0';
+
+  char *secondPort = readUntil('\n', fd);
+  poole.poolePort = atoi(secondPort);
+  free(secondPort);
 }
 
 void phaseOneTesting(Poole poole)
@@ -133,6 +138,7 @@ void closeProgram()
 void listSongs(int clientFD)
 {
   int pipefd[2];
+
   if (pipe(pipefd) == -1)
   {
     printError("Error while creating pipe\n");
@@ -193,6 +199,8 @@ void listSongs(int clientFD)
       exit(1);
     }
 
+    pipeBuffer[numRead] = '\0';
+
     for (ssize_t i = 0; i < numRead; i++)
     {
       if (pipeBuffer[i] == '\n')
@@ -208,6 +216,10 @@ void listSongs(int clientFD)
     response.data = strdup(pipeBuffer);
 
     sendSocketMessage(clientFD, response);
+
+    free(pipeBuffer);
+    free(response.header);
+    free(response.data);
   }
 }
 
@@ -327,7 +339,7 @@ int proccessBowmanMessage(SocketMessage message, int clientFD)
       response2.type = 0x02;
       response2.headerLength = strlen("REMOVE_BOWMAN");
       response2.header = strdup("REMOVE_BOWMAN");
-      
+
       /*int dataLength = strlen(message.data);
       response.data[dataLength]='\0';*/
 
@@ -521,12 +533,11 @@ void connectToDiscovery()
   sendSocketMessage(socketFD, sending);
 
   free(data);
-  // ASK: why no free?
-  // free(sending.header);
-  // free(sending.data);
-
+  
   // RECEIVE MESSAGE
   SocketMessage message = getSocketMessage(socketFD);
+
+
 
   switch (message.type)
   {
@@ -549,6 +560,10 @@ void connectToDiscovery()
 
   free(message.header);
   free(message.data);
+  // ASK: why no free?
+  free(sending.header);
+  free(sending.data);
+
 
   close(socketFD);
 }
@@ -574,7 +589,7 @@ int main(int argc, char *argv[])
   }
 
   // Save the poole information
-  poole = savePoole(fd);
+  savePoole(fd);
   close(fd);
 
   // THIS IS FOR PHASE 1 TESTING
