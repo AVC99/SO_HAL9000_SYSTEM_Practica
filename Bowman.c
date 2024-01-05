@@ -1,31 +1,24 @@
 #define _GNU_SOURCE
 #include "bowman_utilities.h"
-#include "read_until.h"
+#include "io_utils.h"
+#include "struct_definitions.h"
 
 // arnau.vives joan.medina I3_6
 
-typedef struct
-{
-  char *username;
-  char *folder;
-  char *ip;
-  int port;
-} Bowman;
-
 Bowman bowman;
-
-
 /**
  * Saves the bowman information from the file descriptor
-*/
-Bowman saveBowman(int fd)
+ */
+void saveBowman(int fd)
 {
-
   bowman.username = readUntil('\n', fd);
+  bowman.username[strlen(bowman.username) - 1] = '\0';
+
   // check that the username does not contain &
   if (strchr(bowman.username, '&') != NULL)
   {
-    char *newUsername = malloc(strlen(bowman.username) * sizeof(char));
+    printError("Error: Username contains &\n");
+    char *newUsername = malloc((strlen(bowman.username ) + 1) * sizeof(char));
     int j = 0;
     for (size_t i = 0; i < strlen(bowman.username); i++)
     {
@@ -37,23 +30,25 @@ Bowman saveBowman(int fd)
     }
     newUsername[j] = '\0';
     free(bowman.username);
-    bowman.username = newUsername;
+    bowman.username = strdup(newUsername);
+    free(newUsername);
   }
 
   bowman.folder = readUntil('\n', fd);
+  bowman.folder[strlen(bowman.folder) - 1] = '\0';
   bowman.ip = readUntil('\n', fd);
+  //bowman.ip[strlen(bowman.ip) - 1] = '\0';
   char *port = readUntil('\n', fd);
   bowman.port = atoi(port);
   free(port);
-
-  return bowman;
 }
 
 /**
- * Frees all the memory allocated from the global bowman 
-*/
+ * Frees all the memory allocated from the global bowman
+ */
 void freeMemory()
 {
+  // freeUtilitiesBowman();
   free(bowman.username);
   free(bowman.folder);
   free(bowman.ip);
@@ -61,7 +56,7 @@ void freeMemory()
 
 /**
  * Reads the commands from the user and executes them until LOGOUT is called
-*/
+ */
 void commandInterpreter()
 {
   int bytesRead;
@@ -88,7 +83,7 @@ void commandInterpreter()
     // CHECK THE COMMAND can not use SWITCH because it does not work with strings :(
     if (strcasecmp(command, "CONNECT") == 0)
     {
-      connect();
+      connectToDiscovery();
     }
     else if (strcasecmp(command, "LOGOUT") == 0)
     {
@@ -109,7 +104,7 @@ void commandInterpreter()
           }
           else
           {
-            write(1, "Error: Missing arguments\n", strlen("Error: Missing arguments\n"));
+            write(2, "Error: Missing arguments\n", strlen("Error: Missing arguments\n"));
           }
         }
         else if (strcasecmp(token, "LIST") == 0)
@@ -168,7 +163,7 @@ void commandInterpreter()
 
 /**
  * Closes the program
-*/
+ */
 void closeProgram()
 {
   freeMemory();
@@ -177,36 +172,35 @@ void closeProgram()
 
 /**
  * Prints the information of the bowman only for phase 1 testing
-*/
+ */
 void phaseOneTesting()
 {
   char *buffer;
-  write(1, "File read correctly:\n", strlen("File read correctly:\n"));
-  asprintf(&buffer, "User - %s\n", bowman.username);
-  write(1, buffer, strlen(buffer));
+  printToConsole("File read correctly\n");
+  asprintf(&buffer, "User : %s\n", bowman.username);
+  printToConsole(buffer);
   free(buffer);
-  asprintf(&buffer, "Directory - %s\n", bowman.folder);
-  write(1, buffer, strlen(buffer));
+  asprintf(&buffer, "Directory : %s\n", bowman.folder);
+  printToConsole(buffer);
   free(buffer);
-  asprintf(&buffer, "IP - %s\n", bowman.ip);
-  write(1, buffer, strlen(buffer));
+  bowman.ip[strlen(bowman.ip) - 1] = '\0';
+  asprintf(&buffer, "IP : %s\n", bowman.ip);
+  printToConsole(buffer);
   free(buffer);
-  asprintf(&buffer, "Port - %d\n", bowman.port);
-  write(1, buffer, strlen(buffer));
-  write(1, "\n", strlen("\n"));
+  asprintf(&buffer, "Port : %d \n", bowman.port);
+  printToConsole(buffer);
   free(buffer);
 }
+
 /**
  * Main function of Bowman program
-*/
+ */
 int main(int argc, char *argv[])
 {
-  char *buffer;
-
   // Check if the arguments are provided
   if (argc < 2)
   {
-    write(2, "Error: Missing arguments\n", strlen("Error: Missing arguments\n"));
+    write(1, "Error: Missing arguments\n", strlen("Error: Missing arguments\n"));
     return 1;
   }
 
@@ -214,19 +208,22 @@ int main(int argc, char *argv[])
 
   if (fd < 0)
   {
-    write(2, "Error: File not found\n", strlen("Error: File not found\n"));
+    write(1, "Error: File not found\n", strlen("Error: File not found\n"));
     return 1;
   }
+
   signal(SIGINT, closeProgram);
 
   saveBowman(fd);
+  phaseOneTesting(bowman);
 
-  asprintf(&buffer, "%s user initialized\n", bowman.username);
-  write(1, buffer, strlen(buffer));
-  free(buffer);
+  char *b;
+  asprintf(&b, "User initialized : %s \n", bowman.username);
+  printToConsole(b);
+  free(b);
 
   // THIS IS FOR PHASE 1 TESTING
-  phaseOneTesting(bowman);
+
   close(fd);
 
   commandInterpreter();

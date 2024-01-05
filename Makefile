@@ -1,22 +1,21 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -lpthread 
+CFLAGS = -Wall -Wextra -g 
+FFLAGS = -lpthread
 
-all: Bowman Poole 
+all: Bowman Poole Discovery
 
-read_until.o: read_until.c read_until.h
-	$(CC) -c read_until.c
+network_utils.o: network_utils.c 
+io_utils.o: io_utils.c 
+bowman_utilities.o: bowman_utilities.c bowman_utilities.h io_utils.h network_utils.h
+Bowman: Bowman.c bowman_utilities.o io_utils.o network_utils.o
+Poole: Poole.c io_utils.o network_utils.o
+Discovery: Discovery.c io_utils.o network_utils.o
 
-bowman_utilities.o: bowman_utilities.c bowman_utilities.h read_until.o
-	$(CC) -c bowman_utilities.c read_until.o
+%: %.c
+	$(CC) $(CFLAGS) -o $@ $^ $(FFLAGS)
 
-Bowman: Bowman.c bowman_utilities.o
-	$(CC) $(CFLAGS) -o Bowman Bowman.c bowman_utilities.o read_until.o
-
-Poole: Poole.c read_until.o
-	$(CC) $(CFLAGS) -o Poole Poole.c read_until.o
-
-clean: 
-	rm -f *.o
+clean:
+	rm -vf *.o
 
 clean_all: clean
-	rm -f main Bowman Poole valgrind-out.txt
+	rm -vf Bowman Poole Discovery *.txt
