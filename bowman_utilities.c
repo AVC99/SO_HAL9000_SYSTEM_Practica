@@ -214,9 +214,11 @@ void clearDownloads()
     printError("Error while getting current directory\n");
     return;
   }
-
+  // remove the first slash if it exists
+  const char *folderPath = (bowman.folder[0] == '/') ? (bowman.folder + 1) : bowman.folder;
+  
   // Change to the directory
-  if (chdir(poole.folder) != 0)
+  if (chdir(folderPath) != 0)
   {
     printError("Error while changing directory\n");
     return;
