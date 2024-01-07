@@ -99,7 +99,6 @@ void connectToPoole(SocketMessage message)
 void connectToDiscovery()
 {
   printToConsole("CONNECT\n");
-  
 
   if ((discoverySocketFD = createAndConnectSocket(bowman.ip, bowman.port)) < 0)
   {
@@ -117,7 +116,7 @@ void connectToDiscovery()
   m.data = strdup(bowman.username);
 
   sendSocketMessage(discoverySocketFD, m);
-  
+
   // Receive response
   SocketMessage response = getSocketMessage(discoverySocketFD);
 
@@ -204,54 +203,37 @@ void checkDownloads()
 }
 /**
  * This method opens a fork and executes rm -rf to the Bowman folder
-*/
+ */
 void clearDownloads()
 {
   printToConsole("CLEAR DOWNLOADS\n");
 
-  int pipeFD[2];
-
-  if (pipe(pipeFD) < 0)
+  char cwd[PATH_MAX];
+  if (getcwd(cwd, sizeof(cwd)) == NULL)
   {
-    printError("Error creating pipe\n");
+    printError("Error while getting current directory\n");
     return;
   }
-  
-  pid_t pid = fork();
-  
-  if (pid<0){
-    printError("Error creating fork\n");
+
+  // Change to the directory
+  if (chdir(poole.folder) != 0)
+  {
+    printError("Error while changing directory\n");
     return;
   }
-  else if (pid == 0)
-  {
-    // CHILD
-    close(pipeFD[0]);
-    dup2(pipeFD[1], STDOUT_FILENO);
-    dup2(pipeFD[1], STDERR_FILENO);
-    close(pipeFD[1]);
 
-    // REMOVE THE FIRST CHAR OF THE FOLDER
-    const char *folderPath = (bowman.folder[0] == '/') ? (bowman.folder + 1) : bowman.folder;
-    char *args[] = {"rm", "-rvf", folderPath, NULL};
-    execvp(args[0], args);
-    exit(0);
-  }
-  else
+  // Remove all files in the directory
+  int status = system("rm -v *");
+  if (status == -1)
   {
-    // PARENT
-    close(pipeFD[1]);
-    // Wait for the child to finish
-    waitpid(pid, NULL, 0);
-    char buffer[1024];
-    int bytesRead = read(pipeFD[0], buffer, 1024);
-    buffer[bytesRead] = '\0';
-    printToConsole(buffer);
-    close(pipeFD[0]);
-    wait(NULL);
+    printError("Error while removing files\n");
   }
 
-
+  // Change back to the original directory
+  if (chdir(cwd) != 0)
+  {
+    printError("Error while changing back to original directory\n");
+  }
 }
 
 void listPlaylists()
@@ -282,7 +264,7 @@ void listPlaylists()
   free(response.data);
 }
 
-void* downloadSong(void *arg)
+void *downloadSong(void *arg)
 {
   ThreadInfo info = *((ThreadInfo *)arg);
   char *buffer;
@@ -304,14 +286,6 @@ void* downloadSong(void *arg)
     printError("Error connecting to Poole\n");
     return NULL;
   }
-
-
-  
-  
-
-
-
-
 
   return NULL;
 }
@@ -339,20 +313,20 @@ void downloadFile(char *file)
 
   SocketMessage response = getSocketMessage(pooleSocketFD);
 
-  // Start downloading 
+  // Start downloading
 
   // TODO: FREE MEMORY
   ThreadInfo *info = malloc(sizeof(ThreadInfo));
   info->socketFD = pooleSocketFD;
 
-  char* filename = strtok(response.data, "&");
+  char *filename = strtok(response.data, "&");
   info->filename = strdup(filename);
-  
+
   char *fileSize = strtok(NULL, "&");
   long long fileSizeInt = atoll(fileSize);
   info->fileSize = fileSizeInt;
   char *md5sum = strtok(NULL, "&");
-  //free(md5sum);
+  // free(md5sum);
   char *id = strtok(NULL, "&");
   int ID = atoi(id);
   info->ID = ID;
@@ -360,13 +334,13 @@ void downloadFile(char *file)
   asprintf(&buffer, "Filename: %s\nFile size: %lld\nMD5SUM: %s\nID: %d\n", filename, fileSizeInt, md5sum, ID);
   printToConsole(buffer);
   free(buffer);
-  
+
   // TODO: MAYBE I SHOULD OPEN A NEW SOCKET FOR THE DOWNLOADING
   downloadThread = pthread_create(&downloadThread, NULL, downloadSong, info);
 
   // handle response
   free(response.header);
-  //free(response.data);
+  // free(response.data);
 
   pthread_join(downloadThread, NULL);
 }
