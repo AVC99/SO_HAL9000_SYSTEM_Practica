@@ -19,15 +19,18 @@
 #include <netdb.h>
 #include <pthread.h>
 #include <sys/stat.h>
+#include <time.h>
+#include <math.h>
+
 // arnau.vives joan.medina I3_6
 
 Poole poole;
 // FIXME: listenFD what is Bowman? Discovery?
 int listenFD;
-pthread_t *bowmanThreads, *downloadThreads;
+pthread_t *bowmanThreads, *downloadThreads, downloadThread;
 int *bowmanClientSockets;
 int bowmanThreadsCount = 0;
-pthread_mutex_t bowmanThreadsMutex, bowmanClientSocketsMutex, downloadThreadsMutex;
+pthread_mutex_t bowmanThreadsMutex, bowmanClientSocketsMutex, downloadThreadsMutex, pooleMutex, downloadThreadMutex;
 
 // FIXME: idk why this requires to comment the last char of the string and in Bowman and Discovery not
 void savePoole(int fd)
@@ -225,7 +228,81 @@ void listSongs(int clientFD)
 
 void *download_thread_handler(void *arg)
 {
-  free(arg);
+  ThreadInfo threadInfo = *((ThreadInfo *)arg);
+
+  // mutex
+  pthread_mutex_lock(&pooleMutex);
+  const char *folderPath = (poole.folder[0] == '/') ? (poole.folder + 1) : poole.folder;
+  char *song_path = NULL;
+
+  // asprintf(&song_path, "%s/%s", poole.folder, threadInfo.filename);
+  asprintf(&song_path, "%s/%s", folderPath, threadInfo.filename);
+  pthread_mutex_unlock(&pooleMutex);
+
+  // dont need mutex for the file bcs it is only read
+  int song_fd = open(song_path, O_RDONLY);
+  if (song_fd < 0)
+  {
+    printError("Error while opening file\n");
+    exit(1);
+  }
+  int remaining_buffer = BUFFER_SIZE - 1 - 2 - strlen("FILE_DATA") - 3 - 1;
+
+  int number_of_messages = (int)((threadInfo.fileSize + remaining_buffer - 1) / remaining_buffer);
+  printf("Number of messages: %d\n Remaining buffer = %d\n", number_of_messages, remaining_buffer);
+
+  
+  printToConsole("Creating socket to download song\n");
+  // TOOD: MOVE THIS DOWN WHEN THE SOCKET WORKS
+  close(song_fd);
+  int downloadFD = createAndListenSocket(poole.pooleIP, DOWNLOAD_SONG_PORT);
+
+  if (downloadFD < 0)
+  {
+    printError("Error while creating the socket\n");
+    exit(1);
+  }
+
+  printToConsole("Waiting for Bowman to connect To downloads...\n");
+
+  int bowman_download_fd = accept(downloadFD, (struct sockaddr *)NULL, NULL);
+
+  if (bowman_download_fd < 0)
+  {
+    printError("Error while accepting\n");
+    exit(1);
+  }
+  printToConsole("Bowman connected to downloads\n");
+
+
+  /*char *buffer = malloc((remaining_buffer + 1) * sizeof(char));
+  for (int i = 0; i < number_of_messages; i++)
+  {
+
+    ssize_t bytesRead = read(song_fd, buffer, remaining_buffer);
+
+    if (bytesRead < 0)
+    {
+      printError("Error while reading from file\n");
+      exit(1);
+    }
+
+    SocketMessage response;
+    response.type = 0x04;
+    response.headerLength = strlen("FILE_DATA");
+    response.header = strdup("FILE_DATA");
+
+    response.data = strndup(buffer, bytesRead);
+    sendSocketMessage(bowman_download_fd, response);
+    free(response.header);
+    free(response.data);
+  }*/
+
+  free(song_path);
+  
+  close(downloadFD);
+  close(bowman_download_fd);
+
   return NULL;
 }
 
@@ -272,9 +349,9 @@ void download_song(char *song_name, int clientFD)
       printError("Error creating header\n");
       exit(1);
     }
-
+    int id = rand() % 1000;
     char *data;
-    if (asprintf(&data, "%s&%lld&%s", song_name, filesize, md5sum) == -1)
+    if (asprintf(&data, "%s&%lld&%s&%i", song_name, filesize, md5sum, id) == -1)
     {
       printError("Error creating data\n");
       exit(1);
@@ -296,6 +373,19 @@ void download_song(char *song_name, int clientFD)
 
     free(response.header);
     free(response.data);
+
+    // Open a thread to download the file
+    ThreadInfo threadInfo;
+    threadInfo.socketFD = clientFD;
+    threadInfo.filename = strdup(song_name);
+    threadInfo.fileSize = filesize;
+    threadInfo.ID = id;
+
+    if (pthread_create(&downloadThread, NULL, download_thread_handler, &threadInfo) != 0)
+    {
+      printError("Error creating download thread\n");
+      exit(1);
+    }
   }
 }
 
@@ -654,6 +744,9 @@ int main(int argc, char *argv[])
   // initialize mutexes
   pthread_mutex_init(&bowmanThreadsMutex, NULL);
   pthread_mutex_init(&bowmanClientSocketsMutex, NULL);
+  pthread_mutex_init(&downloadThreadsMutex, NULL);
+  pthread_mutex_init(&pooleMutex, NULL);
+  pthread_mutex_init(&downloadThreadMutex, NULL);
 
   connectToDiscovery();
 

@@ -119,6 +119,7 @@ char *get_md5sum(char *filename)
   }
   return NULL;
 }
+
 long long get_file_size(char *filename)
 {
   struct stat fileStat;

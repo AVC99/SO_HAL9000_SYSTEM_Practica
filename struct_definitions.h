@@ -46,10 +46,21 @@ typedef struct
   Bowman *bowmans;
 } PooleServer;
 
+typedef struct {
+  int socketFD;
+  char *filename;
+  int ID;
+  long long fileSize;
+  
+} ThreadInfo;
+
 #define TRUE 1
 #define FALSE 0
 
 #define CON_OK "CON_OK"
 #define DOWNLOAD_SONG "DOWNLOAD_SONG"
+#define DOWNLOAD_SONG_PORT 8054
+
+#define BUFFER_SIZE 256
 
 #endif // STRUCT_DEFINITIONS_H

@@ -26,12 +26,14 @@ void getDiscoveryFromFile(int fd)
 {
   printToConsole("Reading configuration file...\n");
   discovery.pooleIP = readUntil('\n', fd);
-  discovery.pooleIP[strlen(discovery.pooleIP) - 1] = '\0';
+  //discovery.pooleIP[strlen(discovery.pooleIP) - 1] = '\0';
+
   char *firstPort = readUntil('\n', fd);
   discovery.poolePort = atoi(firstPort);
   free(firstPort);
   discovery.bowmanIP = readUntil('\n', fd);
-  discovery.bowmanIP[strlen(discovery.bowmanIP) - 1] = '\0';
+  //discovery.bowmanIP[strlen(discovery.bowmanIP) - 1] = '\0';
+  
   char *secondPort = readUntil('\n', fd);
   discovery.bowmanPort = atoi(secondPort);
   free(secondPort);
