@@ -5,5 +5,4 @@ extern const CONNECT;
 extern const LIST_SONGS;
 extern const LOGOUT;
 
-
-#endif // CONSTANTS_H
+#endif  // CONSTANTS_H
