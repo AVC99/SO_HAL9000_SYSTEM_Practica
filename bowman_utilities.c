@@ -23,6 +23,17 @@ extern Bowman bowman;
 int discoverySocketFD;
 
 /**
+ * @brief Connects to the Poole server with stable connection
+*/
+void connectToPoole(SocketMessage response){
+    printToConsole("Connecting to Poole\n");
+    char *buffer;
+    asprintf(&buffer, "Response data: %s\n", response.data);
+    printToConsole(buffer);
+    free(buffer);
+}
+
+/**
  * @brief Connects to the Discovery server with unstable connection
 */
 void connectToDiscovery(){
@@ -62,13 +73,6 @@ void connectToDiscovery(){
     close(discoverySocketFD);
     printToConsole("Disconnected from Discovery\n");
 
-}
-/**
- * @brief Connects to the Poole server with stable connection
-*/
-void connectToPoole(SocketMessage response){
-
-    printToConsole("Connecting to Poole\n");
 }
 
 void listSongs(){

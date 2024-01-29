@@ -10,28 +10,41 @@
 #include "struct_definitions.h"
 #include "network_utils.h"
 
-int inputFileFd;
+int inputFileFd, discoverySocketFD, terminate = FALSE;
 Poole poole;
 
+/**
+ * @brief Frees the memory allocated for the Poole struct
+*/
 void freeMemory() {
     free(poole.servername);
     free(poole.folder);
     free(poole.discoveryIP);
     free(poole.pooleIP);
 }
-
+/**
+ * @brief Closes the file descriptors if they are open 
+*/
 void closeFds() {
     if (inputFileFd != 0) {
         close(inputFileFd);
     }
+    if(discoverySocketFD != 0){
+        close(discoverySocketFD);
+    }
 }
-
+/**
+ * @brief Closes the program correctly cleaning the memory and closing the file descriptors
+*/
 void closeProgram() {
     freeMemory();
     closeFds();
     exit(0);
 }
-
+/**
+ * @brief Reads the file and saves the information in the Poole struct
+ * @param filename The name of the file to read
+*/
 void savePoole(char *filename) {
     inputFileFd = open(filename, O_RDONLY);
     if (inputFileFd < 0) {
@@ -74,7 +87,9 @@ void savePoole(char *filename) {
     poole.poolePort = atoi(secondPort);
     free(secondPort);
 }
-
+/**
+ * @brief Shows the information read from the file
+*/
 void phaseOneTesting() {
     printToConsole("File read successfully\n");
     char *buffer;
@@ -97,6 +112,45 @@ void phaseOneTesting() {
     printToConsole(buffer);
     free(buffer);
 }
+/**
+ * @brief Connects to the Discovery server with unstable connection
+*/
+void connectToDiscovery(){
+    printToConsole("Connecting to Discovery\n");
+
+    if ((discoverySocketFD = createAndConnectSocket(poole.discoveryIP, poole.discoveryPort)) < 0) {
+        printError("Error connecting to Discovery\n");
+        exit(1);
+    }
+
+    // CONNECTED TO DISCOVERY
+    printToConsole("Connected to Discovery\n");
+
+    SocketMessage m;
+    m.type = 0x01;
+    m.headerLength = strlen("NEW_POOLE");
+    m.header = strdup("NEW_POOLE");
+    m.data = strdup(poole.servername);
+
+    sendSocketMessage(discoverySocketFD, m);
+
+    free(m.header);
+    free(m.data);
+
+    printToConsole("Sent message to Discovery\n");
+
+    // Receive response
+    SocketMessage response = getSocketMessage(discoverySocketFD);
+
+
+    // handle response
+    free(response.header);
+    free(response.data);
+    
+
+    close(discoverySocketFD);
+
+}
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
@@ -109,6 +163,9 @@ int main(int argc, char *argv[]) {
 
     savePoole(argv[1]);
     phaseOneTesting();
+
+    // connect to Discovery
+    connectToDiscovery();
 
     closeProgram();
     return 0;
