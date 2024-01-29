@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -g 
-FFLAGS = -lpthread -nostartfiles
+FFLAGS = -lpthread 
 
 all: Bowman Poole Discovery
 

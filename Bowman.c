@@ -26,7 +26,7 @@ void closeFds() {
     }
 }
 
-void closeProgram(int signal) {
+void closeProgram() {
     freeMemory();
     closeFds();
     exit(0);
@@ -64,6 +64,24 @@ void saveBowman(char* filename) {
     free(port);
 }
 
+void phaseOneTesting(){
+    printToConsole("File read correctly\n");
+    char *buffer;
+    asprintf(&buffer, "Bowman username: %s\n", bowman.username);
+    printToConsole(buffer);
+    free(buffer);
+    asprintf(&buffer, "Bowman folder: %s\n", bowman.folder);
+    printToConsole(buffer);
+    free(buffer);
+    asprintf(&buffer, "Bowman IP: %s\n", bowman.ip);
+    printToConsole(buffer);
+    free(buffer);
+    asprintf(&buffer, "Bowman port: %d\n", bowman.port);
+    printToConsole(buffer);
+    free(buffer);
+    
+}
+
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         printError("Error: Not enough arguments provided\n");
@@ -73,7 +91,8 @@ int main(int argc, char* argv[]) {
     signal(SIGINT, closeProgram);
 
     saveBowman(argv[1]);
+    phaseOneTesting();
 
-    closeProgram(0);
+    closeProgram();
     return 0;
 }

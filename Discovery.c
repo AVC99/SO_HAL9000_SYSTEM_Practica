@@ -25,7 +25,7 @@ void closeFds(){
     }
 }
 
-void closeProgram(int signal){
+void closeProgram(){
     freeMemory();
     closeFds();
     exit(0);
@@ -62,7 +62,7 @@ int main(int argc, char *argv[]){
 
     saveDiscovery(argv[1]);
 
-    closeProgram(0);
+    closeProgram();
 
     return 0;
 }

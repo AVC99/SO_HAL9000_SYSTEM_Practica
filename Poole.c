@@ -21,12 +21,12 @@ void freeMemory() {
 }
 
 void closeFds() {
-    if (closeFds != 0) {
+    if (inputFileFd != 0) {
         close(inputFileFd);
     }
 }
 
-void closeProgram(int signal) {
+void closeProgram() {
     freeMemory();
     closeFds();
     exit(0);
@@ -76,7 +76,8 @@ void savePoole(char *filename) {
 }
 
 void phaseOneTesting() {
-    printToConsole("File read successfully\n") char *buffer;
+    printToConsole("File read successfully\n");
+    char *buffer;
     asprintf(&buffer, "Servername: %s\n", poole.servername);
     printToConsole(buffer);
     free(buffer);
@@ -109,6 +110,6 @@ int main(int argc, char *argv[]) {
     savePoole(argv[1]);
     phaseOneTesting();
 
-    closeProgram(0);
+    closeProgram();
     return 0;
 }

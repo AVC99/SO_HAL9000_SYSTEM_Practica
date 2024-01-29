@@ -192,7 +192,7 @@ void checkDownloads() {
 void clearDownloads() {
     printToConsole("CLEAR DOWNLOADS\n");
 
-    char cwd[PATH_MAX];
+    char cwd[1000];
     if (getcwd(cwd, sizeof(cwd)) == NULL) {
         printError("Error while getting current directory\n");
         return;
@@ -311,7 +311,7 @@ void downloadFile(char *file) {
     free(buffer);
 
     // TODO: MAYBE I SHOULD OPEN A NEW SOCKET FOR THE DOWNLOADING
-    downloadThread = pthread_create(&downloadThread, NULL, downloadSong, info);
+    //downloadThread = pthread_create(&downloadThread, NULL, downloadSong, info);
 
     // handle response
     free(response.header);
