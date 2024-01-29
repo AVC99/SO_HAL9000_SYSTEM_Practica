@@ -34,6 +34,7 @@ char *readUntil(char del, int fd) {
         char *temp = realloc(chain, (sizeof(char) * (i + 1)));
         if (temp == NULL) {
             printError("Error reallocating memory\n");
+            free(chain);
             return NULL;
         }
         chain = temp;

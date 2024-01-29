@@ -3,7 +3,11 @@
 #include "struct_definitions.h"
 
 // arnau.vives joan.medina I3_6
-
+/**
+ * @brief Sends a message through a socket
+ * @param socketFD The socket file descriptor
+ * @param message The message to send
+*/
 void sendSocketMessage(int socketFD, SocketMessage message) {
     char *buffer = malloc(sizeof(char) * 256);
     buffer[0] = message.type;
@@ -31,6 +35,12 @@ void sendSocketMessage(int socketFD, SocketMessage message) {
     free(buffer);
 }
 
+/**
+ * @brief Creates a socket and connects it to a server
+ * @param IP The IP address of the server
+ * @param port The port of the server
+ * @return The socket file descriptor
+*/
 int createAndConnectSocket(char *IP, int port) {
     char *buffer;
     asprintf(&buffer, "Creating and connecting socket on %s:%d\n", IP, port);
@@ -125,6 +135,7 @@ int createAndListenSocket(char *IP, int port) {
 }
 
 SocketMessage getSocketMessage(int clientFD) {
+    printToConsole("Getting socket message\n");
     char *buffer;
     SocketMessage message;
     // get the type

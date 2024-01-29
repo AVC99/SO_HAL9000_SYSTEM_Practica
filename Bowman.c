@@ -9,6 +9,7 @@
 #include "io_utils.h"
 #include "struct_definitions.h"
 #include "network_utils.h"
+#include "bowman_utilities.h"
 
 int inputFileFd;
 Bowman bowman;
@@ -82,6 +83,95 @@ void phaseOneTesting(){
     
 }
 
+
+/**
+ * Reads the commands from the user and executes them until LOGOUT is called
+ */
+void commandInterpreter() {
+    int bytesRead;
+    char *command;
+    int continueReading = TRUE;
+    do {
+        printToConsole("Bowman $ ");
+        // READ THE COMMAND
+        command = readUntil('\n', 0);
+        bytesRead = strlen(command);
+        if (bytesRead == 0) {
+            break;
+        }
+        command[bytesRead] = '\0';
+
+        // FORMAT THE COMMAND ADDING THE \0 AND REMOVING THE \n
+        int len = strlen(command);
+        if (len > 0 && command[len - 1] == '\n') {
+            command[len - 1] = '\0';
+        }
+
+        // CHECK THE COMMAND can not use SWITCH because it does not work with strings :(
+        if (strcasecmp(command, "CONNECT") == 0) {
+            connectToDiscovery();
+            free(command);
+        } else if (strcasecmp(command, "LOGOUT") == 0) {
+            logout();
+            continueReading = FALSE;
+        } else  // IF THE COMMAND HAS MORE THAN ONE WORD
+        {
+            char *token = strtok(command, " ");
+
+            if (token != NULL) {
+                if (strcasecmp(token, "DOWNLOAD") == 0) {
+                    char *filename = strtok(NULL, " ");
+                    if (filename != NULL && strtok(NULL, " ") == NULL) {
+                        downloadFile(filename);
+                        free(command);
+                    } else {
+                        printError("Error: Missing arguments\n");
+                        free(command);
+                    }
+                } else if (strcasecmp(token, "LIST") == 0) {
+                    token = strtok(NULL, " ");
+                    if (token != NULL && strcasecmp(token, "SONGS") == 0) {
+                        listSongs();
+                        free(command);
+                    } else if (token != NULL && strcasecmp(token, "PLAYLISTS") == 0) {
+                        listPlaylists();
+                        free(command);
+                    } else {
+                        printError("Error: Missing arguments\n");
+                        free(command);
+                    }
+                } else if (strcasecmp(token, "CHECK") == 0) {
+                    token = strtok(NULL, " ");
+                    if (token != NULL && strcasecmp(token, "DOWNLOADS") == 0) {
+                        checkDownloads();
+                        free(command);
+                    } else {
+                        printError("Error: Missing arguments\n");
+                        free(command);
+                    }
+                } else if (strcasecmp(token, "CLEAR") == 0) {
+                    token = strtok(NULL, " ");
+                    if (token != NULL && strcasecmp(token, "DOWNLOADS") == 0) {
+                        clearDownloads();
+                        free(command);
+                    } else {
+                        printError("Error: Missing arguments\n");
+                        free(command);
+                    }
+                } else {
+                    printError("ERROR: Please input a valid command.\n");
+                    free(command);
+                }
+            } else {
+                printError("ERROR: Please input a valid command.\n");
+                free(command);
+            }
+        }
+    } while (continueReading == TRUE);
+    free(command);
+}
+
+
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         printError("Error: Not enough arguments provided\n");
@@ -92,6 +182,8 @@ int main(int argc, char* argv[]) {
 
     saveBowman(argv[1]);
     phaseOneTesting();
+
+    commandInterpreter();
 
     closeProgram();
     return 0;
