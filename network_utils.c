@@ -82,7 +82,11 @@ int createAndConnectSocket(char *IP, int port) {
 
     return socketFD;
 }
-
+/**
+ * @brief Creates a socket and listens to it
+ * @param IP The IP address of the server
+ * @param port The port of the server
+*/
 int createAndListenSocket(char *IP, int port) {
     char *buffer;
     asprintf(&buffer, "Creating socket on %s:%d\n", IP, port);

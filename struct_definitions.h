@@ -43,7 +43,6 @@ typedef struct
     int poolePort;
     char *pooleIP;
     char *pooleServername;
-    Bowman *bowmans;
 } PooleServer;
 
 typedef struct {

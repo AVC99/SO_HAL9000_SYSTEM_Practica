@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include <fcntl.h>
+#include <limits.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
@@ -11,11 +12,13 @@
 #include "network_utils.h"
 #include "struct_definitions.h"
 
-int inputFileFd, terminate = FALSE, listenBowmanFD, listenPooleFD;
+volatile int terminate = FALSE;
+int inputFileFd, listenBowmanFD, listenPooleFD, numPooles = 0;
 Discovery discovery;
 pthread_t bowmanThread, pooleThread;
-pthread_mutex_t terminateMutex = PTHREAD_MUTEX_INITIALIZER;
-
+pthread_mutex_t terminateMutex = PTHREAD_MUTEX_INITIALIZER, numPoolesMutex = PTHREAD_MUTEX_INITIALIZER,
+                poolesMutex = PTHREAD_MUTEX_INITIALIZER;
+PooleServer *pooles;
 /**
  * @brief Frees the memory allocated for the Discovery struct
  */
@@ -47,6 +50,8 @@ void closeProgram() {
 
     freeMemory();
     closeFds();
+    pthread_detach(bowmanThread);
+    pthread_detach(pooleThread);
     exit(0);
 }
 
@@ -95,14 +100,9 @@ void *listenToBowman() {
         printError("Error creating Bowman socket\n");
         exit(1);
     }
-
+    pthread_mutex_lock(&terminateMutex);
     while (terminate == FALSE) {
-        /*pthread_mutex_lock(&terminateMutex);
-        if (terminate) {
-            pthread_mutex_unlock(&terminateMutex);
-            pthread_exit(NULL);
-        }
-        pthread_mutex_unlock(&terminateMutex);*/
+        pthread_mutex_unlock(&terminateMutex);
 
         printToConsole("Waiting for Bowman...\n");
 
@@ -117,40 +117,68 @@ void *listenToBowman() {
         SocketMessage m = getSocketMessage(bowmanSocketFD);
         printToConsole("Message received\n");
 
-        char *buffer;
-        asprintf(&buffer, "Message type: %d\n", m.type);
-        printToConsole(buffer);
-        free(buffer);
-        asprintf(&buffer, "Message header length: %d\n", m.headerLength);
-        printToConsole(buffer);
-        free(buffer);
-        asprintf(&buffer, "Message header: %s\n", m.header);
-        printToConsole(buffer);
-        free(buffer);
-        asprintf(&buffer, "Message data: %s\n", m.data);
-        printToConsole(buffer);
-        free(buffer);
-
         if (strcmp(m.header, "NEW_BOWMAN") == 0) {
-            printToConsole("Bowman connected to Discovery\n");
+            printToConsole("New Bowman connected to Discovery\n");
 
-            // Send response
-            SocketMessage response;
-            response.type = 0x01;
-            response.headerLength = strlen("NEW_BOWMAN");
-            response.header = strdup("NEW_BOWMAN");
-            response.data = strdup("OK");
+            pthread_mutex_lock(&numPoolesMutex);
+            if (numPooles == 0) {
+                pthread_mutex_unlock(&numPoolesMutex);
+                printError("ERROR: No Poole connected\n");
+                SocketMessage response;
+                response.type = 0x01;
+                response.headerLength = strlen("CON_KO");
+                response.header = strdup("CON_KO");
+                response.data = strdup("");
 
-            sendSocketMessage(bowmanSocketFD, response);
+                sendSocketMessage(bowmanSocketFD, response);
+                free(response.header);
+                free(response.data);
+            } else {
+                pthread_mutex_unlock(&numPoolesMutex);
+                printToConsole("Searching for the Poole with less Bowmans\n");
+                int minBowmans = INT_MAX, minBowmansIndex = -1;
+                // Search for the Poole with less Bowmans
 
-            free(response.header);
-            free(response.data);
+                pthread_mutex_lock(&poolesMutex);
+                for (int i = 0; i < numPooles; i++) {
+                    if (pooles[i].numOfBowmans < minBowmans) {
+                        minBowmans = pooles[i].numOfBowmans;
+                        minBowmansIndex = i;
+                    }
+                }
+                char *buffer;
+                asprintf(&buffer, "Poole with less Bowmans: %s\n", pooles[minBowmansIndex].pooleServername);
+                printToConsole(buffer);
+                free(buffer);
+                pooles[minBowmansIndex].numOfBowmans++;
+
+                printToConsole("Sending Poole information to Bowman\n");
+                SocketMessage response;
+                response.type = 0x01;
+                response.headerLength = strlen("CON_OK");
+                response.header = strdup("CON_OK");
+                char *data;
+                asprintf(&data, "%s&%d&%s", pooles[minBowmansIndex].pooleServername, pooles[minBowmansIndex].poolePort,
+                         pooles[minBowmansIndex].pooleIP);
+                response.data = strdup(data);
+
+                sendSocketMessage(bowmanSocketFD, response);
+
+                pthread_mutex_unlock(&poolesMutex);
+                pthread_mutex_unlock(&numPoolesMutex);
+
+                free(response.header);
+                free(response.data);
+                free(data);
+            }
         }
+
         free(m.header);
         free(m.data);
 
         close(bowmanSocketFD);
     }
+    pthread_mutex_unlock(&terminateMutex);
 
     return NULL;
 }
@@ -180,46 +208,55 @@ void *listenToPoole() {
 
         printToConsole("Message received\n");
 
-        char *buffer;
-        asprintf(&buffer, "Message type: %d\n", m.type);
-        printToConsole(buffer);
-        free(buffer);
-        asprintf(&buffer, "Message header length: %d\n", m.headerLength);
-        printToConsole(buffer);
-        free(buffer);
-        asprintf(&buffer, "Message header: %s\n", m.header);
-        printToConsole(buffer);
-        free(buffer);
-        asprintf(&buffer, "Message data: %s\n", m.data);
-        printToConsole(buffer);
-        free(buffer);
-
         if (strcmp(m.header, "NEW_POOLE") == 0) {
             printToConsole("Poole connected to Discovery\n");
 
             // Send response
             SocketMessage response;
             response.type = 0x01;
-            response.headerLength = strlen("NEW_POOLE");
-            response.header = strdup("NEW_POOLE");
-            response.data = strdup("OK");
+            response.headerLength = strlen("CON_OK");
+            response.header = strdup("CON_OK");
+            response.data = strdup("");
 
             sendSocketMessage(pooleSocketFD, response);
 
             free(response.header);
             free(response.data);
+
+            // Add Poole to the list
+            pthread_mutex_lock(&numPoolesMutex);
+            numPooles++;
+            pthread_mutex_lock(&poolesMutex);
+            char *dataCopy = strdup(m.data);
+            char *serverName = strtok(dataCopy, "&");
+            char *portStr = strtok(NULL, "&");
+            char *ip = strtok(NULL, "&");
+
+            pooles = realloc(pooles, sizeof(PooleServer) * numPooles);
+            pooles[numPooles - 1].numOfBowmans = 0;
+            pooles[numPooles - 1].pooleIP = strdup(ip);
+            pooles[numPooles - 1].poolePort = atoi(portStr);
+            pooles[numPooles - 1].pooleServername = strdup(serverName);
+
+            free(dataCopy);
+            free(m.header);
+            free(m.data);
+
+            pthread_mutex_unlock(&poolesMutex);
+            pthread_mutex_unlock(&numPoolesMutex);
         }
 
-        free(m.header);
-        free(m.data);
 
         close(pooleSocketFD);
     }
+    pthread_mutex_unlock(&terminateMutex);
+
     return NULL;
 }
+
 /**
  * @brief Main function
-*/
+ */
 int main(int argc, char *argv[]) {
     signal(SIGINT, closeProgram);
     if (argc != 2) {
@@ -230,7 +267,6 @@ int main(int argc, char *argv[]) {
     saveDiscovery(argv[1]);
     phaseOneTesting();
 
-    // Create Bowman thread
     if (pthread_create(&bowmanThread, NULL, (void *)listenToBowman, NULL) != 0) {
         printError("Error creating Bowman thread\n");
         exit(1);
@@ -240,7 +276,6 @@ int main(int argc, char *argv[]) {
         printError("Error creating Poole thread\n");
         exit(1);
     }
-    
 
     pthread_join(bowmanThread, NULL);
     pthread_join(pooleThread, NULL);

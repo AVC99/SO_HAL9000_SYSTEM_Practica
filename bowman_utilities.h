@@ -25,4 +25,3 @@ void clearDownloads();
 void listPlaylists();
 void downloadFile(char *file);
 void logout();
-void freeUtilitiesBowman();

@@ -16,29 +16,81 @@
 #include <unistd.h>
 
 #include "io_utils.h"
-#include "struct_definitions.h"
 #include "network_utils.h"
+#include "struct_definitions.h"
 
 extern Bowman bowman;
-int discoverySocketFD;
+int discoverySocketFD, pooleSocketFD, isPooleConnected = FALSE;
 
 /**
  * @brief Connects to the Poole server with stable connection
-*/
-void connectToPoole(SocketMessage response){
+ */
+void connectToPoole(SocketMessage response) {
     printToConsole("Connecting to Poole\n");
-    char *buffer;
-    asprintf(&buffer, "Response data: %s\n", response.data);
-    printToConsole(buffer);
-    free(buffer);
+    char *dataCopy = strdup(response.data);
+    char *pooleServename = strtok(dataCopy, "&");
+    char *poolePort = strtok(NULL, "&");
+    char *pooleIP = strtok(NULL, "&");
+
+    printToConsole("Poole servername: ");
+    printToConsole(pooleServename);
+    printToConsole("\n");
+
+    printToConsole("Poole port: ");
+    printToConsole(poolePort);
+    printToConsole("\n");
+
+    printToConsole("Poole IP: ");
+    printToConsole(pooleIP);
+    printToConsole("\n");
+
+    int poolePortInt = atoi(poolePort);
+
+    // CONNECT TO POOLE
+    if ((pooleSocketFD = createAndConnectSocket(pooleIP, poolePortInt)) < 0) {
+        printError("Error connecting to Poole\n");
+        exit(1);
+    }
+
+    printToConsole("Connected to Poole\n");
+    free(dataCopy);
+
+    // Send message to Poole
+    SocketMessage m;
+    m.type = 0x01;
+    m.headerLength = strlen("NEW_BOWMAN");
+    m.header = strdup("NEW_BOWMAN");
+    m.data = strdup(bowman.username);
+
+    sendSocketMessage(pooleSocketFD, m);
+
+    free(m.header);
+    free(m.data);
+
+    printToConsole("Sent message to Poole\n");
+
+    SocketMessage pooleResponse = getSocketMessage(pooleSocketFD);
+
+    printToConsole("Received message from Poole\n");
+    
+    if (pooleResponse.type == 0x01 && strcmp(pooleResponse.header, "CON_OK") == 0) {
+        printToConsole("Poole connected to Bowman\n");
+        isPooleConnected = TRUE;
+    } else {
+        printError("Error connecting to Poole\n");
+        exit(1);
+    }
+    free(pooleResponse.header);
+    free(pooleResponse.data);
+
+    // IMPORTANT: response is freed in the main function
 }
 
 /**
  * @brief Connects to the Discovery server with unstable connection
-*/
-void connectToDiscovery(){
+ */
+void connectToDiscovery() {
     printToConsole("CONNECT\n");
-
 
     if ((discoverySocketFD = createAndConnectSocket(bowman.ip, bowman.port)) < 0) {
         printError("Error connecting to Discovery\n");
@@ -62,7 +114,6 @@ void connectToDiscovery(){
 
     // handle response
     connectToPoole(response);
-    
 
     free(response.header);
     free(response.data);
@@ -72,31 +123,30 @@ void connectToDiscovery(){
     // ASK: IDK IF I SHOULD CLOSE THE SOCKET HERE
     close(discoverySocketFD);
     printToConsole("Disconnected from Discovery\n");
-
 }
 
-void listSongs(){
+void listSongs() {
     printToConsole("LIST SONGS\n");
 }
-void checkDownloads(){
+void checkDownloads() {
     printToConsole("CHECK DOWNLOADS\n");
 }
-void clearDownloads(){
+void clearDownloads() {
     printToConsole("CLEAR DOWNLOADS\n");
 }
-void listPlaylists(){
+void listPlaylists() {
     printToConsole("LIST PLAYLISTS\n");
 }
-void downloadFile(char *file){
+void downloadFile(char *file) {
     printToConsole("DOWNLOAD FILE\n");
     char *buffer;
     asprintf(&buffer, "Downloading file: %s\n", file);
     printToConsole(buffer);
     free(buffer);
 }
-void logout(){
+void logout() {
     printToConsole("LOGOUT\n");
 }
-void freeUtilitiesBowman(){
+void freeUtilitiesBowman() {
     printToConsole("FREE UTILITIES BOWMAN\n");
 }
