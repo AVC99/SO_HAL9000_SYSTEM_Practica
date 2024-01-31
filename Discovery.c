@@ -172,6 +172,20 @@ void *listenToBowman() {
                 free(response.data);
                 free(data);
             }
+        } else if (strcmp(m.header, "EXIT") == 0) {
+            printToConsole("Bowman disconnected\n");
+            SocketMessage response;
+            response.type = 0x06;
+            response.headerLength = strlen("CON_OK");
+            response.header = strdup("CON_OK");
+            response.data = strdup("");
+
+            sendSocketMessage(bowmanSocketFD, response);
+
+            free(response.header);
+            free(response.data);
+
+            // TODO: DO LOAD BALANCER SHENANIGANS
         }
 
         free(m.header);

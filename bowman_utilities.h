@@ -18,7 +18,7 @@
 
 extern Bowman bowman;
 
-void connectToDiscovery();
+int connectToDiscovery(int isExit);
 void listSongs();
 void checkDownloads();
 void clearDownloads();

@@ -13,17 +13,25 @@
 
 int inputFileFd;
 Bowman bowman;
-
+extern int discoverySocketFD, pooleSocketFD, isPooleConnected;
+char *command;
 void freeMemory() {
     // freeUtilitiesBowman();
     free(bowman.username);
     free(bowman.folder);
     free(bowman.ip);
+    free(command);
 }
 
 void closeFds() {
     if (inputFileFd != 0) {
         close(inputFileFd);
+    }
+    if (discoverySocketFD != 0) {
+        close(discoverySocketFD);
+    }
+    if(pooleSocketFD != 0){
+        close(pooleSocketFD);
     }
 }
 
@@ -89,7 +97,7 @@ void phaseOneTesting(){
  */
 void commandInterpreter() {
     int bytesRead;
-    char *command;
+    
     int continueReading = TRUE;
     do {
         printToConsole("Bowman $ ");
@@ -109,7 +117,7 @@ void commandInterpreter() {
 
         // CHECK THE COMMAND can not use SWITCH because it does not work with strings :(
         if (strcasecmp(command, "CONNECT") == 0) {
-            connectToDiscovery();
+            connectToDiscovery(FALSE);
             free(command);
         } else if (strcasecmp(command, "LOGOUT") == 0) {
             logout();
@@ -168,7 +176,7 @@ void commandInterpreter() {
             }
         }
     } while (continueReading == TRUE);
-    free(command);
+    // free(command); I FREE AT CLOSE PROGRAM
 }
 
 

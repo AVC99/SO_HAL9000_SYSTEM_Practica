@@ -103,7 +103,7 @@ void connectToPoole(SocketMessage response) {
 /**
  * @brief Connects to the Discovery server with unstable connection
  */
-void connectToDiscovery() {
+int connectToDiscovery(int isExit) {
     printToConsole("CONNECT\n");
 
     if ((discoverySocketFD = createAndConnectSocket(bowman.ip, bowman.port)) < 0) {
@@ -115,32 +115,80 @@ void connectToDiscovery() {
     printToConsole("Connected to Discovery\n");
 
     SocketMessage m;
-    m.type = 0x01;
-    m.headerLength = strlen("NEW_BOWMAN");
-    m.header = strdup("NEW_BOWMAN");
-    m.data = strdup(bowman.username);
+    if (isExit == FALSE) {
+        m.type = 0x01;
+        m.headerLength = strlen("NEW_BOWMAN");
+        m.header = strdup("NEW_BOWMAN");
+        m.data = strdup(bowman.username);
+    } else if (isExit == TRUE) {
+        m.type = 0x06;
+        m.headerLength = strlen("EXIT");
+        m.header = strdup("EXIT");
+        m.data = strdup(bowman.username);
+    }
 
     sendSocketMessage(discoverySocketFD, m);
+    free(m.header);
+    free(m.data);
 
     printToConsole("Sent message to Discovery\n");
     // Receive response
     SocketMessage response = getSocketMessage(discoverySocketFD);
 
     // handle response
-    connectToPoole(response);
+    if (isExit == FALSE) {
+        connectToPoole(response);
+        free(response.header);
+        free(response.data);
+        close(discoverySocketFD);
 
+        return FALSE;
+    } else if (isExit == TRUE) {
+        if (response.type == 0x06 && strcmp(response.header, "CON_OK") == 0) {
+            printToConsole("Bowman disconnected from Discovery\n");
+        } else if (response.type == 0x06 && strcmp(response.header, "CON_KO") == 0) {
+            printError("Error disconnecting from Discovery\n");
+            exit(1);
+        }
+        free(response.header);
+        free(response.data);
+        close(discoverySocketFD);
+
+        return TRUE;
+    }
+
+    //! It should never reach this point
     free(response.header);
     free(response.data);
+    return -1;
+}
+/**
+ * @brief Lists the songs in the Poole server in the Bowman console
+ */
+void listSongs() {
+    printToConsole("LIST SONGS\n");
+
+    pthread_mutex_lock(&isPooleConnectedMutex);
+    if (isPooleConnected == FALSE) {
+        pthread_mutex_unlock(&isPooleConnectedMutex);
+        printError("You are not connected to Poole\n");
+        return;
+    }
+    pthread_mutex_unlock(&isPooleConnectedMutex);
+
+    SocketMessage m;
+
+    m.type = 0x02;
+    m.headerLength = strlen("LIST_SONGS");
+    m.header = strdup("LIST_SONGS");
+    m.data = strdup("");
+
+    sendSocketMessage(pooleSocketFD, m);
+
     free(m.header);
     free(m.data);
 
-    // ASK: IDK IF I SHOULD CLOSE THE SOCKET HERE
-    close(discoverySocketFD);
-    printToConsole("Disconnected from Discovery\n");
-}
-
-void listSongs() {
-    printToConsole("LIST SONGS\n");
+    printToConsole("Message sent to Poole\n");
 }
 void checkDownloads() {
     printToConsole("CHECK DOWNLOADS\n");
@@ -160,4 +208,25 @@ void downloadFile(char *file) {
 }
 void logout() {
     printToConsole("LOGOUT\n");
+    pthread_mutex_lock(&isPooleConnectedMutex);
+    if (isPooleConnected == TRUE) {
+        pthread_mutex_unlock(&isPooleConnectedMutex);
+        SocketMessage m;
+        m.type = 0x06;
+        m.headerLength = strlen("EXIT");
+        m.header = strdup("EXIT");
+        m.data = strdup(bowman.username);
+
+        sendSocketMessage(pooleSocketFD, m);
+
+        free(m.header);
+        free(m.data);
+
+        pthread_join(listenThread, NULL);
+        close(pooleSocketFD);
+        if (connectToDiscovery(TRUE) == TRUE) {
+            printToConsole("Bowman disconnected from Discovery correctly\n");
+        }
+    }
+    pthread_mutex_unlock(&isPooleConnectedMutex);
 }

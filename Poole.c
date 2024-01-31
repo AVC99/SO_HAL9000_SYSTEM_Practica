@@ -9,6 +9,7 @@
 
 #include "io_utils.h"
 #include "network_utils.h"
+#include "poole_thread_handler.h"
 #include "struct_definitions.h"
 #define MAX_THREADS 50
 
@@ -37,17 +38,21 @@ void closeFds() {
     if (discoverySocketFD != 0) {
         close(discoverySocketFD);
     }
+    if (bowmanSocketFD != 0) {
+        close(bowmanSocketFD);
+    }
 }
 /**
  * @brief Closes the program correctly cleaning the memory and closing the file descriptors
  */
 void closeProgram() {
-    //TODO: close threads using pthread_cancel
+    // TODO: close threads using pthread_cancel
     printToConsole("Closing program\n");
     freeMemory();
     closeFds();
     exit(0);
 }
+
 /**
  * @brief Reads the file and saves the information in the Poole struct
  * @param filename The name of the file to read
@@ -121,66 +126,6 @@ void phaseOneTesting() {
 }
 
 /**
- * @brief Processes the message received from the Bowman and returns if the thread should terminate
- * @param message The message received from the Bowman
- * @param bowmanSocket The socket of the Bowman
-*/
-int processBowmanMessage(SocketMessage message, int bowmanSocket){
-    printToConsole("Processing message from Bowman\n");
-    char *buffer;
-    asprintf(&buffer, "Message type: %d\n", message.type);
-    printToConsole(buffer);
-    free(buffer);
-
-    asprintf(&buffer, "Bowman fd = %d", bowmanSocket);
-
-
-
-    return TRUE;
-}
-
-/**
- * @brief Handles the Bowman thread
- * @param arg The bowman socket (int)
-*/
-void *bowmanThreadHandler(void *arg) {
-    printToConsole("Bowman thread created\n");
-    int bowmanSocket = *((int *)arg);
-    free(arg);
-    SocketMessage m;
-    m.type = 0x01;
-    m.headerLength = strlen("CON_OK");
-    m.header = strdup("CON_OK");
-    m.data = strdup("");
-
-    sendSocketMessage(bowmanSocket, m);
-
-    printToConsole("Sent message to Bowman\n");
-
-    free(m.header);
-    free(m.data);
-
-    int terminateThread = FALSE;
-
-    while (terminateThread == FALSE){
-        printToConsole("Waiting for message from Bowman\n");
-        SocketMessage message = getSocketMessage(bowmanSocket);
-        printToConsole("Received message from Bowman\n");
-
-        terminateThread = processBowmanMessage(message, bowmanSocket);
-
-        free(message.header);
-        free(message.data); 
-    }
-
-
-
-    close(bowmanSocket);    
-    return NULL;
-}
-
-
-/**
  * @brief Listens for stable bowman connections
  */
 void listenForBowmans() {
@@ -214,7 +159,7 @@ void listenForBowmans() {
 
         pthread_mutex_lock(&numThreadsMutex);
         if (numThreads < MAX_THREADS) {
-            int *pBowmanSocket = malloc(sizeof(int));	
+            int *pBowmanSocket = malloc(sizeof(int));
             *pBowmanSocket = bowmanSocket;
             if (pthread_create(&threads[numThreads], NULL, bowmanThreadHandler, pBowmanSocket) != 0) {
                 printError("Error creating thread\n");
@@ -228,7 +173,6 @@ void listenForBowmans() {
             printError("Error: Maximum number of threads reached\n");
         }
         pthread_mutex_unlock(&numThreadsMutex);
-
     }
     pthread_mutex_unlock(&terminateMutex);
     close(bowmanSocketFD);

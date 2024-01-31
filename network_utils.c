@@ -185,7 +185,10 @@ SocketMessage getSocketMessage(int clientFD) {
 
     return message;
 }
-
+/**
+ * @brief Sends the default error message through a socket
+ * @param clientFD The socket file descriptor
+*/
 void sendError(int clientFD) {
     SocketMessage message;
     message.type = 0x07;
