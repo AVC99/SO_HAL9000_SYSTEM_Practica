@@ -42,6 +42,7 @@ void closeFds() {
  * @brief Closes the program correctly cleaning the memory and closing the file descriptors
  */
 void closeProgram() {
+    //TODO: close threads using pthread_cancel
     printToConsole("Closing program\n");
     freeMemory();
     closeFds();
@@ -118,6 +119,7 @@ void phaseOneTesting() {
     printToConsole(buffer);
     free(buffer);
 }
+
 /**
  * @brief Processes the message received from the Bowman and returns if the thread should terminate
  * @param message The message received from the Bowman

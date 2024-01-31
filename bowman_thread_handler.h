@@ -15,3 +15,6 @@
 #include "struct_definitions.h"
 
 extern Bowman bowman;
+extern int pooleSocketFD, isPooleConnected;
+
+void *listenToPoole(void *arg);

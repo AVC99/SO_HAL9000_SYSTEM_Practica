@@ -44,14 +44,15 @@ void closeFds() {
  * @brief Closes the program correctly cleaning the memory and closing the file descriptors
  */
 void closeProgram() {
+    // TODO: close threads using pthread_cancel
     pthread_mutex_lock(&terminateMutex);
     terminate = TRUE;
     pthread_mutex_unlock(&terminateMutex);
 
+    pthread_join(bowmanThread, NULL);
+    pthread_join(pooleThread, NULL);
     freeMemory();
     closeFds();
-    pthread_detach(bowmanThread);
-    pthread_detach(pooleThread);
     exit(0);
 }
 
@@ -245,7 +246,6 @@ void *listenToPoole() {
             pthread_mutex_unlock(&poolesMutex);
             pthread_mutex_unlock(&numPoolesMutex);
         }
-
 
         close(pooleSocketFD);
     }

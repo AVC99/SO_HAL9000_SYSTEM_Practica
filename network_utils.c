@@ -139,7 +139,6 @@ int createAndListenSocket(char *IP, int port) {
 }
 
 SocketMessage getSocketMessage(int clientFD) {
-    printToConsole("Getting socket message\n");
     char *buffer;
     SocketMessage message;
     // get the type

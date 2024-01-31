@@ -15,12 +15,15 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "bowman_thread_handler.h"
 #include "io_utils.h"
 #include "network_utils.h"
 #include "struct_definitions.h"
 
 extern Bowman bowman;
 int discoverySocketFD, pooleSocketFD, isPooleConnected = FALSE;
+pthread_mutex_t isPooleConnectedMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_t listenThread;
 
 /**
  * @brief Connects to the Poole server with stable connection
@@ -72,10 +75,21 @@ void connectToPoole(SocketMessage response) {
     SocketMessage pooleResponse = getSocketMessage(pooleSocketFD);
 
     printToConsole("Received message from Poole\n");
-    
+
     if (pooleResponse.type == 0x01 && strcmp(pooleResponse.header, "CON_OK") == 0) {
         printToConsole("Poole connected to Bowman\n");
+        pthread_mutex_lock(&isPooleConnectedMutex);
         isPooleConnected = TRUE;
+        pthread_mutex_unlock(&isPooleConnectedMutex);
+
+        // Start listening to Poole no need to pass the socket file descriptor to the thread
+        // because it is a global variable
+        if (pthread_create(&listenThread, NULL, listenToPoole, NULL) != 0) {
+            printError("Error creating thread\n");
+            close(pooleSocketFD);
+            exit(1);
+        }
+
     } else {
         printError("Error connecting to Poole\n");
         exit(1);
@@ -146,7 +160,4 @@ void downloadFile(char *file) {
 }
 void logout() {
     printToConsole("LOGOUT\n");
-}
-void freeUtilitiesBowman() {
-    printToConsole("FREE UTILITIES BOWMAN\n");
 }
