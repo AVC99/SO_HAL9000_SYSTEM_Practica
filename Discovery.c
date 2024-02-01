@@ -1,421 +1,333 @@
 #define _GNU_SOURCE
-#include "io_utils.h"
-#include "struct_definitions.h"
-#include "network_utils.h"
-
-#include <stdio.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <sys/ioctl.h>
-#include <netdb.h>
-#include <pthread.h>
-#include <arpa/inet.h>
+#include <fcntl.h>
 #include <limits.h>
+#include <pthread.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
-// arnau.vives joan.medina I3_6
+#include "io_utils.h"
+#include "network_utils.h"
+#include "struct_definitions.h"
 
+volatile int terminate = FALSE;
+int inputFileFd, listenBowmanFD, listenPooleFD, numPooles = 0;
 Discovery discovery;
-int listenPooleFD, listenBowmanFD, numPooleServers = 0;
-PooleServer *pooleServers;
-pthread_mutex_t mutex;
-
+pthread_t bowmanThread, pooleThread;
+pthread_mutex_t terminateMutex = PTHREAD_MUTEX_INITIALIZER, numPoolesMutex = PTHREAD_MUTEX_INITIALIZER,
+                poolesMutex = PTHREAD_MUTEX_INITIALIZER;
+PooleServer *pooles;
 /**
- * Saves the discovery information from the file
+ * @brief Frees the memory allocated for the Discovery struct
  */
-void getDiscoveryFromFile(int fd)
-{
-  printToConsole("Reading configuration file...\n");
-  discovery.pooleIP = readUntil('\n', fd);
-  //discovery.pooleIP[strlen(discovery.pooleIP) - 1] = '\0';
+void freeMemory() {
+    free(discovery.pooleIP);
+    free(discovery.bowmanIP);
+    pthread_mutex_lock(&poolesMutex);
+    for (int i = 0; i < numPooles; i++) {
+        free(pooles[i].pooleIP);
+        free(pooles[i].pooleServername);
+        for (int j = 0; j < pooles[i].numOfBowmans; j++) {
+            free(pooles[i].bowmans[j]);
+        }
+    }
+    free(pooles);
+    pthread_mutex_unlock(&poolesMutex);
+}
+/**
+ * @brief Closes the file descriptors if they are open
+ */
+void closeFds() {
+    if (inputFileFd != 0) {
+        close(inputFileFd);
+    }
+    if (listenBowmanFD != 0) {
+        close(listenBowmanFD);
+    }
+    if (listenPooleFD != 0) {
+        close(listenPooleFD);
+    }
+}
+/**
+ * @brief Closes the program correctly cleaning the memory and closing the file descriptors
+ */
+void closeProgram() {
+    // TODO: close threads using pthread_cancel
+    printToConsole("Closing program\n");
+    
+    pthread_mutex_lock(&terminateMutex);
+    terminate = TRUE;
+    pthread_mutex_unlock(&terminateMutex);
 
-  char *firstPort = readUntil('\n', fd);
-  discovery.poolePort = atoi(firstPort);
-  free(firstPort);
-  discovery.bowmanIP = readUntil('\n', fd);
-  //discovery.bowmanIP[strlen(discovery.bowmanIP) - 1] = '\0';
-  
-  char *secondPort = readUntil('\n', fd);
-  discovery.bowmanPort = atoi(secondPort);
-  free(secondPort);
+    pthread_detach(bowmanThread);
+    pthread_cancel(bowmanThread);
+    pthread_detach(pooleThread);
+    pthread_cancel(pooleThread);
 
-  close(fd);
+    freeMemory();
+    closeFds();
+    exit(0);
 }
 
-/**
- * Frees all the memory allocated from the global Discovery
- */
-void freeMemory()
-{
-  free(discovery.pooleIP);
-  free(discovery.bowmanIP);
-
-  close(listenPooleFD);
-  close(listenBowmanFD);
-
-  pthread_mutex_destroy(&mutex);
+void phaseOneTesting() {
+    char *buffer;
+    printToConsole("Discovery information:\n");
+    asprintf(&buffer, "Poole IP: %s\n", discovery.pooleIP);
+    printToConsole(buffer);
+    free(buffer);
+    asprintf(&buffer, "Bowman IP: %s\n", discovery.bowmanIP);
+    printToConsole(buffer);
+    free(buffer);
+    asprintf(&buffer, "Poole port: %d\n", discovery.poolePort);
+    printToConsole(buffer);
+    free(buffer);
+    asprintf(&buffer, "Bowman port: %d\n", discovery.bowmanPort);
+    printToConsole(buffer);
+    free(buffer);
 }
 
-/**
- * Closes the program
- */
-void closeProgram()
-{
-  freeMemory();
-  exit(0);
+void saveDiscovery(char *filename) {
+    inputFileFd = open(filename, O_RDONLY);
+    if (inputFileFd < 0) {
+        printError("Error: File not found\n");
+        exit(1);
+    }
+    discovery.pooleIP = readUntil('\n', inputFileFd);
+    // discovery.pooleIP[strlen(discovery.pooleIP) - 1] = '\0';
+
+    char *port = readUntil('\n', inputFileFd);
+    discovery.poolePort = atoi(port);
+    free(port);
+
+    discovery.bowmanIP = readUntil('\n', inputFileFd);
+    // discovery.bowmanIP[strlen(discovery.bowmanIP) - 1] = '\0';
+    port = readUntil('\n', inputFileFd);
+    discovery.bowmanPort = atoi(port);
+    free(port);
+    close(inputFileFd);
 }
 
-/**
- * Opens a socket and binds it to the given ip and port
- * Listens to posible bowman connections and redirects them to the less crowded poole
- */
-void *listenToBowman()
-{
+void *listenToBowman() {
+    printToConsole("Listening to Bowman\n");
 
-  printToConsole("Listening to Bowman...\n");
-
-  if ((listenBowmanFD = createAndListenSocket(discovery.bowmanIP, discovery.bowmanPort)) < 0)
-  {
-    printError("Error creating the socket\n");
-    exit(1);
-  }
-
-  while (1)
-  {
-    printToConsole("\nWaiting for Bowman connections...\n");
-
-    int clientFD = accept(listenBowmanFD, (struct sockaddr *)NULL, NULL);
-
-    if (clientFD < 0)
-    {
-      printError("Error while accepting\n");
-      exit(1);
+    if ((listenBowmanFD = createAndListenSocket(discovery.bowmanIP, discovery.bowmanPort)) < 0) {
+        printError("Error creating Bowman socket\n");
+        exit(1);
     }
+    pthread_mutex_lock(&terminateMutex);
+    while (terminate == FALSE) {
+        pthread_mutex_unlock(&terminateMutex);
 
-    printToConsole("\nNew client connected !\n");
+        printToConsole("Waiting for Bowman...\n");
 
-    // GET SOCKET DATA
-    SocketMessage message = getSocketMessage(clientFD);
+        int bowmanSocketFD = accept(listenBowmanFD, (struct sockaddr *)NULL, NULL);
 
-    if (strcmp(message.header, "NEW_BOWMAN") == 0)
-    {
-      printToConsole("NEW_BOWMAN DETECTED\n");
-
-      if (numPooleServers == 0)
-      {
-        printError("ERROR: No poole servers available\n");
-        SocketMessage response;
-        response.type = 0x01;
-        response.headerLength = strlen("CON_KO");
-        response.header = strdup("CON_KO");
-        response.data = strdup("");
-
-        sendSocketMessage(clientFD, response);
-      }
-      else
-      {
-        char *buffer;
-        printToConsole("Sending bowman to the less crowded poole server\n");
-
-        // Lock the mutex before accessing the shared variable
-        pthread_mutex_lock(&mutex);
-        asprintf(&buffer, "BOWMAN Number of poole servers: %d\n", numPooleServers);
-        printToConsole(buffer);
-        free(buffer);
-
-        if (numPooleServers == 0)
-        {
-          printError("ERROR: No poole servers available\n");
-          SocketMessage response;
-          response.type = 0x01;
-          response.headerLength = strlen("CON_KO");
-          response.header = strdup("CON_KO");
-          response.data = strdup("");
-
-          sendSocketMessage(clientFD, response);
-          break;
+        if (bowmanSocketFD < 0) {
+            printError("Error accepting Bowman\n");
+            exit(1);
         }
+        printToConsole("Bowman connected\n");
 
-        int minBowmans = INT_MAX, lowestIndexPoole = -1;
+        SocketMessage m = getSocketMessage(bowmanSocketFD);
+        printToConsole("Message received\n");
 
-        pthread_mutex_unlock(&mutex);
+        if (strcmp(m.header, "NEW_BOWMAN") == 0) {
+            printToConsole("New Bowman connected to Discovery\n");
 
-        for (int i = 0; i < numPooleServers; i++)
-        {
-          pthread_mutex_lock(&mutex);
-          asprintf(&buffer, "Poole server name: %s\n", pooleServers[i].pooleServername);
-          printToConsole(buffer);
-          free(buffer);
-          if (pooleServers[i].numOfBowmans < minBowmans)
-          {
-            minBowmans = pooleServers[i].numOfBowmans;
-            lowestIndexPoole = i;
-          }
-          pthread_mutex_unlock(&mutex);
-        }
+            pthread_mutex_lock(&numPoolesMutex);
+            if (numPooles == 0) {
+                pthread_mutex_unlock(&numPoolesMutex);
+                printError("ERROR: No Poole connected\n");
+                SocketMessage response;
+                response.type = 0x01;
+                response.headerLength = strlen("CON_KO");
+                response.header = strdup("CON_KO");
+                response.data = strdup("");
 
-        pthread_mutex_lock(&mutex);
-        asprintf(&buffer, "Lowest index poole: %d\n", lowestIndexPoole);
-        printToConsole(buffer);
-        free(buffer);
-        asprintf(&buffer, "Poole server name: %s\n", pooleServers[lowestIndexPoole].pooleServername);
-        printToConsole(buffer);
-        free(buffer);
-        asprintf(&buffer, "Poole server port: %d\n", pooleServers[lowestIndexPoole].poolePort);
-        printToConsole(buffer);
-        free(buffer);
-        asprintf(&buffer, "Poole server ip: %s\n", pooleServers[lowestIndexPoole].pooleIP);
-        printToConsole(buffer);
-        free(buffer);
+                sendSocketMessage(bowmanSocketFD, response);
+                free(response.header);
+                free(response.data);
+            } else {
+                pthread_mutex_unlock(&numPoolesMutex);
+                printToConsole("Searching for the Poole with less Bowmans\n");
+                int minBowmans = INT_MAX, minBowmansIndex = -1;
+                // Search for the Poole with less Bowmans
 
-        printToConsole("Poole server found\n");
-        SocketMessage response;
-        response.type = 0x01;
-        response.headerLength = strlen("CON_OK");
-        response.header = strdup("CON_OK");
-
-        char *bufferr;
-        asprintf(&bufferr, "%s&%d&%s", pooleServers[lowestIndexPoole].pooleServername, pooleServers[lowestIndexPoole].poolePort, pooleServers[lowestIndexPoole].pooleIP);
-        response.data = bufferr;
-
-        sendSocketMessage(clientFD, response);
-
-        pooleServers[lowestIndexPoole].numOfBowmans++;
-        // pooleServers[lowestIndexPoole].bowmans = realloc(pooleServers[lowestIndexPoole].bowmans, sizeof(Bowman) * pooleServers[lowestIndexPoole].numOfBowmans);
-
-        // Unlock the mutex
-        pthread_mutex_unlock(&mutex);
-
-        //???
-        // free(buffer);
-      }
-
-      // TODO: CHECK WHEN I NEED TO FREE THIS MEMORY i got munmap_chunk(): invalid pointer
-      // free(response.header);
-      // free(response.data);
-    }
-    else if (strcmp(message.header, "NEW_POOLE") == 0)
-    {
-      printToConsole("NEW_POOLE DETECTED\n");
-      SocketMessage response;
-      response.type = 0x01;
-      response.headerLength = strlen("CON_OK");
-      response.header = strdup("CON_OK");
-      response.data = strdup("");
-
-      sendSocketMessage(clientFD, response);
-
-      // TODO: CHECK WHEN I NEED TO FREE THIS MEMORY i got munmap_chunk(): invalid pointer
-      free(response.header);
-      free(response.data);
-    }
-
-    // TODO: CHECK WHEN I NEED TO FREE THIS MEMORY
-    //  FREE MEMORY FROM MESSAGE
-    free(message.header);
-    free(message.data);
-
-    close(clientFD);
-  }
-  return NULL;
-}
-
-/**
- * Opens a socket and binds it to the given ip and port
- * Listens to posible poole connections and adds them to the list of active poole servers
- */
-void *listenToPoole()
-{
-
-  printToConsole("Listening to Poole...\n");
-
-  if ((listenPooleFD = createAndListenSocket(discovery.pooleIP, discovery.poolePort)) < 0)
-  {
-    printError("Error creating the socket\n");
-    exit(1);
-  }
-
-  while (1)
-  {
-    printToConsole("\nWaiting for Poole connections...\n");
-
-    int clientFD = accept(listenPooleFD, (struct sockaddr *)NULL, NULL);
-
-    if (clientFD < 0)
-    {
-      printError("Error while accepting\n");
-      exit(1);
-    }
-    printToConsole("\nNew client connected !\n");
-
-    // GET SOCKET DATA
-    SocketMessage message = getSocketMessage(clientFD);
-
-    switch (message.type)
-    {
-    case 0x01:
-
-      if (strcmp(message.header, "NEW_POOLE") == 0)
-      {
-        printToConsole("NEW_POOLE DETECTED\n");
-        SocketMessage response;
-        response.type = 0x01;
-        response.headerLength = strlen("CON_OK");
-        response.header = strdup("CON_OK");
-        response.data = strdup("");
-
-        sendSocketMessage(clientFD, response);
-        // Lock the mutex before accessing the shared variable
-        pthread_mutex_lock(&mutex);
-
-        // add the poole to the list of active poole servers
-        numPooleServers++;
-        printf("numPooleServers: %d\n", numPooleServers);
-        // handle possible realloc errors
-        PooleServer *temp = realloc(pooleServers, sizeof(PooleServer) * numPooleServers);
-        if (temp == NULL)
-        {
-          printError("Error reallocating memory\n");
-          exit(1);
-        }
-        else
-        {
-          printf("numPooleServers INDEX: %d\n", numPooleServers - 1);
-          pooleServers = temp;
-          pooleServers->numOfBowmans = 0;
-
-          char *token = strtok(message.data, "&");
-          pooleServers[numPooleServers - 1].pooleServername = strdup(token);
-
-          token = strtok(NULL, "&");
-          pooleServers[numPooleServers - 1].poolePort = atoi(token);
-
-          token = strtok(NULL, "&");
-          pooleServers[numPooleServers - 1].pooleIP = strdup(token);
-
-          //???
-          // free(token);
-          printToConsole("Poole server added to the list\n");
-
-          char *buffer;
-          asprintf(&buffer, "Poole server name: %s\n", pooleServers[numPooleServers - 1].pooleServername);
-          printToConsole(buffer);
-          free(buffer);
-          asprintf(&buffer, "Poole server port: %d\n", pooleServers[numPooleServers - 1].poolePort);
-          printToConsole(buffer);
-          free(buffer);
-          asprintf(&buffer, "Poole server ip: %s\n", pooleServers[numPooleServers - 1].pooleIP);
-          printToConsole(buffer);
-          free(buffer);
-        }
-      }
-      else
-      {
-        printError("ERROR: Can't establish connection\n");
-        SocketMessage response;
-        response.type = 0x01;
-        response.headerLength = strlen("CON_KO");
-        response.header = strdup("CON_KO");
-        response.data = strdup("");
-
-        sendSocketMessage(clientFD, response);
-
-        free(response.header);
-        free(response.data);
-      }
-
-      break;
-
-    case 0x02:
-      if (strcmp(message.header, "REMOVE_BOWMAN"))
-      {
-        printToConsole("REMOVE_BOWMAN DETECTED\n");
-
-        // Lock the mutex before accessing the shared variable
-        pthread_mutex_lock(&mutex);
-        for (int i = 0; i < numPooleServers; i++)
-        {
-          if (strcmp(pooleServers[i].pooleServername, message.data) == 0)
-          {
-
-            for (int j = 0; j < pooleServers[i].numOfBowmans; j++)
-            {
-              if (strcmp(pooleServers[i].bowmans[j].username, message.data) == 0)
-              {
-                for (int k = j; k < pooleServers[i].numOfBowmans - 1; k++)
-                {
-                  pooleServers[i].bowmans[k] = pooleServers[i].bowmans[k + 1];
+                pthread_mutex_lock(&poolesMutex);
+                for (int i = 0; i < numPooles; i++) {
+                    if (pooles[i].numOfBowmans < minBowmans) {
+                        minBowmans = pooles[i].numOfBowmans;
+                        minBowmansIndex = i;
+                    }
                 }
-                pooleServers[i].bowmans = realloc(pooleServers[i].bowmans, sizeof(Bowman) * pooleServers[i].numOfBowmans);
-                break;
-              }
-              pooleServers[i].numOfBowmans--;
+                char *buffer;
+                asprintf(&buffer, "Poole with less Bowmans: %s\n", pooles[minBowmansIndex].pooleServername);
+                printToConsole(buffer);
+                free(buffer);
+                pooles[minBowmansIndex].numOfBowmans++;
+                pooles[minBowmansIndex].bowmans[pooles[minBowmansIndex].numOfBowmans - 1] = strdup(m.data);
+
+                printToConsole("Sending Poole information to Bowman\n");
+                SocketMessage response;
+                response.type = 0x01;
+                response.headerLength = strlen("CON_OK");
+                response.header = strdup("CON_OK");
+                char *data;
+                asprintf(&data, "%s&%d&%s", pooles[minBowmansIndex].pooleServername, pooles[minBowmansIndex].poolePort,
+                         pooles[minBowmansIndex].pooleIP);
+                response.data = strdup(data);
+
+                sendSocketMessage(bowmanSocketFD, response);
+
+                pthread_mutex_unlock(&poolesMutex);
+                pthread_mutex_unlock(&numPoolesMutex);
+
+                free(response.header);
+                free(response.data);
+                free(data);
             }
-            break;
-          }
+        } else if (strcmp(m.header, "EXIT") == 0) {
+            pthread_mutex_lock(&poolesMutex);
+
+            printToConsole("Bowman disconnected\n");
+            SocketMessage response;
+            response.type = 0x06;
+            response.headerLength = strlen("CON_OK");
+            response.header = strdup("CON_OK");
+            response.data = strdup("");
+
+            sendSocketMessage(bowmanSocketFD, response);
+
+            free(response.header);
+            free(response.data);
+
+            // TODO: DO LOAD BALANCER SHENANIGANS
+            pthread_mutex_lock(&numPoolesMutex);
+            for (int i = 0; i < numPooles; i++) {
+                for (int j = 0; j < pooles[i].numOfBowmans; j++) {
+                    if (strcmp(pooles[i].bowmans[j], m.data) == 0) {
+                        free(pooles[i].bowmans[j]);
+                        pooles[i].bowmans[j] = pooles[i].bowmans[pooles[i].numOfBowmans - 1];
+                        pooles[i].numOfBowmans--;
+                        printToConsole("Bowman removed from Poole\n");
+                        break;
+                    }
+                }
+            }
+            pthread_mutex_unlock(&numPoolesMutex);
+            pthread_mutex_unlock(&poolesMutex);
         }
-        // Unlock the mutex before returning
-        pthread_mutex_unlock(&mutex);
 
-      }
-      break;
+        free(m.header);
+        free(m.data);
 
-    default:
-
-      printError("Error: Wrong message type\n");
-      sendError(clientFD);
-
-      break;
+        close(bowmanSocketFD);
     }
-    // Unlock the mutex before returning
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&terminateMutex);
 
-    // TODO: CHECK WHEN I NEED TO FREE THIS MEMORY
-    //  FREE MEMORY FROM MESSAGE
-    free(message.header);
-    free(message.data);
-
-    close(clientFD);
-  }
-
-  return NULL;
+    return NULL;
 }
 
-int main(int argc, char *argv[])
-{
-  pthread_t pooleThread, bowmanThread;
-  // Reprogram the SIGINT signal
-  signal(SIGINT, closeProgram);
+void *listenToPoole() {
+    printToConsole("Listening to Poole\n");
 
-  // Check if the arguments are provided
-  if (argc != 2)
-  {
-    printError("Error: Missing arguments\n");
-    return 1;
-  }
-  int fd = open(argv[1], O_RDONLY);
-  if (fd < 0)
-  {
-    printError("Error: File not found\n");
-    return 1;
-  }
+    if ((listenPooleFD = createAndListenSocket(discovery.pooleIP, discovery.poolePort)) < 0) {
+        printError("Error creating Poole socket\n");
+        exit(1);
+    }
+    pthread_mutex_lock(&terminateMutex);
+    while (terminate == FALSE) {
+        pthread_mutex_unlock(&terminateMutex);
+        printToConsole("Waiting for Poole...\n");
 
-  getDiscoveryFromFile(fd);
+        int pooleSocketFD = accept(listenPooleFD, (struct sockaddr *)NULL, NULL);
 
-  // Initialize the mutex
-  if (pthread_mutex_init(&mutex, NULL) != 0)
-  {
-    printError("Error: Mutex init failed\n");
-    return 1;
-  }
+        if (pooleSocketFD < 0) {
+            printError("Error accepting Poole\n");
+            exit(1);
+        }
 
-  // Create the threads
-  pthread_create(&pooleThread, NULL, (void *)listenToPoole, NULL);
-  pthread_create(&bowmanThread, NULL, (void *)listenToBowman, NULL);
+        printToConsole("Poole connected\n");
 
-  pthread_join(pooleThread, NULL);
-  pthread_join(bowmanThread, NULL);
+        SocketMessage m = getSocketMessage(pooleSocketFD);
 
-  freeMemory();
+        printToConsole("Message received\n");
 
-  return 0;
+        if (strcmp(m.header, "NEW_POOLE") == 0) {
+            printToConsole("Poole connected to Discovery\n");
+
+            // Send response
+            SocketMessage response;
+            response.type = 0x01;
+            response.headerLength = strlen("CON_OK");
+            response.header = strdup("CON_OK");
+            response.data = strdup("");
+
+            sendSocketMessage(pooleSocketFD, response);
+
+            free(response.header);
+            free(response.data);
+
+            // Add Poole to the list
+            pthread_mutex_lock(&numPoolesMutex);
+            numPooles++;
+            pthread_mutex_lock(&poolesMutex);
+            char *dataCopy = strdup(m.data);
+            char *serverName = strtok(dataCopy, "&");
+            char *portStr = strtok(NULL, "&");
+            char *ip = strtok(NULL, "&");
+
+            pooles = realloc(pooles, sizeof(PooleServer) * numPooles);
+            pooles[numPooles - 1].numOfBowmans = 0;
+            pooles[numPooles - 1].pooleIP = strdup(ip);
+            pooles[numPooles - 1].poolePort = atoi(portStr);
+            pooles[numPooles - 1].pooleServername = strdup(serverName);
+
+            free(dataCopy);
+            free(m.header);
+            free(m.data);
+
+            pthread_mutex_unlock(&poolesMutex);
+            pthread_mutex_unlock(&numPoolesMutex);
+        }
+
+        close(pooleSocketFD);
+    }
+    pthread_mutex_unlock(&terminateMutex);
+
+    return NULL;
+}
+
+/**
+ * @brief Main function
+ */
+int main(int argc, char *argv[]) {
+    signal(SIGINT, closeProgram);
+    
+    if (argc != 2) {
+        printError("Error: Wrong number of arguments\n");
+        exit(1);
+    }
+
+    saveDiscovery(argv[1]);
+    phaseOneTesting();
+
+    if (pthread_create(&bowmanThread, NULL, (void *)listenToBowman, NULL) != 0) {
+        printError("Error creating Bowman thread\n");
+        exit(1);
+    }
+
+    if (pthread_create(&pooleThread, NULL, (void *)listenToPoole, NULL) != 0) {
+        printError("Error creating Poole thread\n");
+        exit(1);
+    }
+
+    pthread_join(bowmanThread, NULL);
+    pthread_join(pooleThread, NULL);
+
+    closeProgram();
+
+    return 0;
 }

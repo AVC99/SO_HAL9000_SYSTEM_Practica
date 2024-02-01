@@ -4,6 +4,8 @@
 !*.*
 #UNIGNORE DIRECTORIES 
 !*/
+.DS_Store 
+*.dSYM
 
 *.o
 *.tar
