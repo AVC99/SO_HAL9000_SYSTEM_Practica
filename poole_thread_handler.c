@@ -85,6 +85,176 @@ void listSongs(int bowmanSocket) {
 }
 
 /**
+ * @brief Lists the playlists in the Poole folder playlists are .txt files with songs in them
+ * @param bowmanSocket The socket of the Bowman
+ */
+void listPlaylists(int bowmanSocket) {
+    printToConsole("List Playlists\n");
+    int fd[2];
+    pipe(fd);
+    pid_t pid = fork();
+
+    if (pid == 0) {
+        //* CHILD
+        close(fd[0]);
+        dup2(fd[1], STDOUT_FILENO);
+        close(fd[1]);
+
+        const char *folderPath = (poole.folder[0] == '/') ? (poole.folder + 1) : poole.folder;
+
+        if (chdir(folderPath) < 0) {
+            printError("Error changing directory\n");
+            exit(1);
+        }
+
+        execlp("sh", "sh", "-c", "ls | grep .txt ", NULL);
+        //! it should never reach this point
+        printError("Error executing ls\n");
+        exit(1);
+    } else if (pid > 0) {
+        //* PARENT
+        close(fd[1]);
+
+        // FIXME: IDK WHAT NUMBER TO PUT IN  THE BUFFER SIZE
+        char *pipeBuffer = malloc(1000 * sizeof(char));
+        ssize_t bytesRead = read(fd[0], pipeBuffer, 1000);
+
+        if (bytesRead < 0) {
+            printError("Error reading from pipe\n");
+            exit(1);
+        }
+
+        pipeBuffer[bytesRead] = '\0';
+
+        SocketMessage m;
+        m.type = 0x02;
+        m.headerLength = strlen("PLAYLISTS_RESPONSE");
+        m.header = strdup("PLAYLISTS_RESPONSE");
+
+        //* remaining size is the 256 - size of type, headerLength, header and \0
+        size_t remainingBufferSize = BUFFER_SIZE - 3 - m.headerLength - 1;
+        char *data = malloc(remainingBufferSize * sizeof(char));
+        data[0] = '\0';
+
+        int numBuffers = bytesRead / remainingBufferSize;
+        if (bytesRead % remainingBufferSize != 0) {
+            numBuffers++;  // add one extra buffer for the remaining bytes
+        }
+
+        char *printBuffer;
+        asprintf(&printBuffer, "Pipebuffer : %s\n", pipeBuffer);
+        printToConsole(printBuffer);
+        free(printBuffer);
+
+        const char *folderPath = (poole.folder[0] == '/') ? (poole.folder + 1) : poole.folder;
+
+        if (chdir(folderPath) < 0) {
+            printError("Error changing directory\n");
+            exit(1);
+        }
+
+        char *fileName = strtok(pipeBuffer, "\n");
+        asprintf(&printBuffer, "Filename: %s", fileName);
+        printToConsole(printBuffer);
+        free(printBuffer);
+
+        size_t dataLength = 0;
+        // FIRST BUFFER HAS F AND THE NUMBER OF BUFFERS
+        // THE REST OF THE BUFFERS HAVE C AND THE NUMBER OF THE BUFFER
+        char *numBuffersString;
+        asprintf(&numBuffersString, "%d", numBuffers);
+        strcat(data, "F");
+        dataLength += strlen("F");
+        strcat(data, numBuffersString);
+        dataLength += strlen(numBuffersString);
+        strcat(data, "&");
+        dataLength += strlen("&");
+        free(numBuffersString);
+        numBuffersString = NULL;
+
+        int buffersSent = 0;
+
+        while (fileName != NULL) {
+            int playlistfd = open(fileName, O_RDONLY);
+
+            if (playlistfd < 0) {
+                printError("Error: File not found\n");
+                fileName = strtok(NULL, "\n");
+                exit(1);
+            }
+
+            char *numOfSongs = readUntil('\n', playlistfd);
+            int numOfSongsInt = atoi(numOfSongs);
+            free(numOfSongs);
+            strcat(data, fileName);
+            dataLength += strlen(fileName);
+            strcat(data, "&");
+            dataLength += strlen("&");
+
+            for (int i = 0; i < numOfSongsInt; i++) {
+                char *songName = readUntil('\n', playlistfd);
+                if (songName != NULL) {
+                    strcat(data, songName);
+                    dataLength += strlen(songName);
+                    strcat(data, "&");
+                    dataLength += strlen("&");
+                    free(songName);
+                }
+            }
+            close(playlistfd);
+            strcat(data, "#");
+            if (dataLength + 1 > remainingBufferSize) {  // +2 for the & and #
+                m.data = strdup(data);
+                //! REMOVE THIS
+                char *buffer;
+                asprintf(&buffer, "Sending message to Bowman: %s\n", m.data);
+                printToConsole(buffer);
+                free(buffer);
+                sendSocketMessage(bowmanSocket, m);
+                free(m.data);
+                m.data = NULL;
+                buffersSent++;
+                data[0] = '\0';
+                dataLength = 0;
+                strcat(data, "C");
+                dataLength += strlen("C");
+                strcat(data, numBuffersString);
+                dataLength += strlen(numBuffersString);
+                free(numBuffersString);
+                strcat(data, "&");
+                dataLength += strlen("&");
+            } else {
+                strcat(data, "#");
+                dataLength += strlen("#");
+            }
+
+            fileName = strtok(NULL, "\n");
+        }
+
+        if (strlen(data) > 0) {
+            m.data = strdup(data);
+            sendSocketMessage(bowmanSocket, m);
+            free(m.data);
+        }
+        free(data);
+
+        free(m.header);
+        free(pipeBuffer);
+
+        close(fd[0]);
+        // change back to the original directory
+        if (chdir("..") < 0) {
+            printError("Error changing directory\n");
+            exit(1);
+        }
+        waitpid(pid, NULL, 0);
+    } else {
+        printError("Error forking\n");
+        exit(1);
+    }
+}
+
+/**
  * @brief Processes the message received from the Bowman and returns if the thread should terminate
  * @param message The message received from the Bowman
  * @param bowmanSocket The socket of the Bowman
@@ -97,7 +267,7 @@ int processBowmanMessage(SocketMessage message, int bowmanSocket) {
                 listSongs(bowmanSocket);
 
             } else if (strcmp(message.header, "LIST_PLAYLISTS") == 0) {
-                // listPlaylists(bowmanSocket);
+                listPlaylists(bowmanSocket);
                 printToConsole("LIST PLAYLISTS\n");
             } else {
                 printError("Error processing message from Bowman\n");
@@ -149,7 +319,6 @@ int processBowmanMessage(SocketMessage message, int bowmanSocket) {
 
                 sendSocketMessage(bowmanSocket, response);
 
-                
                 free(response.header);
                 free(response.data);
 

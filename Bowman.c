@@ -36,6 +36,7 @@ void closeFds() {
 }
 
 void closeProgram() {
+    logout();
     freeMemory();
     closeFds();
     exit(0);

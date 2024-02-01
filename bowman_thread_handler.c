@@ -38,6 +38,30 @@ void listSongs_BH(SocketMessage response) {
     free(buffer);
 }
 
+void listPlaylists_BH(SocketMessage response) {
+    // SHOW THE SONG IN THE CONSOLE
+    // OUTPUT IS NOT GREAT BUT IT IS WHAT IT IS
+
+    // get the fist characters before &
+    char* start = strchr(response.data, '&');
+
+    if (start == NULL) {
+        printError("Error parsing the response\n");
+        return;
+    }
+
+    for (char* c = start; *c != '\0'; c++) {
+        if (*c == '&' || *c == '#') {
+            *c = '\n';
+        }
+    }
+
+    char* buffer;
+    asprintf(&buffer, "Playlists in the Poole server:\n%s", start);
+    printToConsole(buffer);
+    free(buffer);
+}
+
 /**
  * @brief Connects to the Poole server with stable connection and listens to it
  * @param arg not used
@@ -55,9 +79,8 @@ void* listenToPoole(void* arg) {
             case 0x02: {
                 if (strcmp(response.header, "SONGS_RESPONSE") == 0) {
                     listSongs_BH(response);
-                } else if (strcmp(response.header, "LIST_PLAYLIST") == 0) {
-                    // checkDownloads(response);
-                    printToConsole("LIST_PLAYLIST\n");
+                } else if (strcmp(response.header, "PLAYLISTS_RESPONSE") == 0) {
+                    listPlaylists_BH(response);
                 } else {
                     printError("Unknown header\n");
                 }
@@ -75,7 +98,7 @@ void* listenToPoole(void* arg) {
                 }
                 break;
             }
-            case 0x06:{
+            case 0x06: {
                 if (strcmp(response.header, "CON_OK") == 0) {
                     printToConsole("Poole disconnected\n");
                     pthread_mutex_lock(&isPooleConnectedMutex);

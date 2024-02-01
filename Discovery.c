@@ -25,6 +25,16 @@ PooleServer *pooles;
 void freeMemory() {
     free(discovery.pooleIP);
     free(discovery.bowmanIP);
+    pthread_mutex_lock(&poolesMutex);
+    for (int i = 0; i < numPooles; i++) {
+        free(pooles[i].pooleIP);
+        free(pooles[i].pooleServername);
+        for (int j = 0; j < pooles[i].numOfBowmans; j++) {
+            free(pooles[i].bowmans[j]);
+        }
+    }
+    free(pooles);
+    pthread_mutex_unlock(&poolesMutex);
 }
 /**
  * @brief Closes the file descriptors if they are open
@@ -47,10 +57,11 @@ void closeProgram() {
     // TODO: close threads using pthread_cancel
     pthread_mutex_lock(&terminateMutex);
     terminate = TRUE;
+    printToConsole("Closing program\n");
     pthread_mutex_unlock(&terminateMutex);
 
-    pthread_join(bowmanThread, NULL);
-    pthread_join(pooleThread, NULL);
+    pthread_cancel(bowmanThread);
+    pthread_cancel(pooleThread);
     freeMemory();
     closeFds();
     exit(0);
@@ -152,6 +163,7 @@ void *listenToBowman() {
                 printToConsole(buffer);
                 free(buffer);
                 pooles[minBowmansIndex].numOfBowmans++;
+                pooles[minBowmansIndex].bowmans[pooles[minBowmansIndex].numOfBowmans - 1] = strdup(m.data);
 
                 printToConsole("Sending Poole information to Bowman\n");
                 SocketMessage response;
@@ -173,6 +185,9 @@ void *listenToBowman() {
                 free(data);
             }
         } else if (strcmp(m.header, "EXIT") == 0) {
+
+            pthread_mutex_lock(&poolesMutex);
+
             printToConsole("Bowman disconnected\n");
             SocketMessage response;
             response.type = 0x06;
@@ -186,6 +201,20 @@ void *listenToBowman() {
             free(response.data);
 
             // TODO: DO LOAD BALANCER SHENANIGANS
+            pthread_mutex_lock(&numPoolesMutex);
+            for( int i = 0; i< numPooles; i++){
+                for(int j = 0; j < pooles[i].numOfBowmans; j++){
+                    if(strcmp(pooles[i].bowmans[j], m.data) == 0){
+                        free(pooles[i].bowmans[j]);
+                        pooles[i].bowmans[j] = pooles[i].bowmans[pooles[i].numOfBowmans - 1];
+                        pooles[i].numOfBowmans--;
+                        printToConsole("Bowman removed from Poole\n");
+                        break;
+                    }
+                }
+            }
+            pthread_mutex_unlock(&numPoolesMutex);
+            pthread_mutex_unlock(&poolesMutex);
         }
 
         free(m.header);

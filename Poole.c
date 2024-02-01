@@ -208,7 +208,7 @@ void connectToDiscovery() {
     free(data);
 
     printToConsole("Sent message to Discovery\n");
-
+    // ! FIXME : WHEN CTRL+C IS PRESSED THIS HAS MEMORY LEAKS
     // Receive response
     SocketMessage response = getSocketMessage(discoverySocketFD);
 
@@ -247,7 +247,7 @@ int main(int argc, char *argv[]) {
 
     // connect to Discovery
     connectToDiscovery();
-
+    // TODO : CREATE MONOLIT (FORK) PHASE 4
     closeProgram();
     return 0;
 }

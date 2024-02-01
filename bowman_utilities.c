@@ -14,6 +14,7 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+#include <dirent.h>
 
 #include "bowman_thread_handler.h"
 #include "io_utils.h"
@@ -190,14 +191,146 @@ void listSongs() {
 
     printToConsole("Message sent to Poole\n");
 }
+/**
+ * @brief Shows the .txt files in the folder
+ * @param folderPath path of the folder where the playlists are downloaded without the first slash
+ */
+void checkDownloadedPlaylists(const char *folderPath){
+    DIR *dir = opendir(folderPath);
+    if (dir == NULL){
+        printError("Error while opening directory\n");
+        return;
+    }
+
+    char *buffer;
+    asprintf(&buffer, "Playlists in the %s folder :\n", folderPath);
+    printToConsole(buffer);
+    free(buffer);
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        char *ext = strrchr(entry->d_name, '.');
+        if (ext != NULL && strcmp(ext, ".txt") == 0) {
+            char *filePath;
+            asprintf(&filePath, "%s/%s", folderPath, entry->d_name);
+            
+            asprintf(&buffer, "Playlist : %s\n", entry->d_name);
+            printToConsole(buffer);
+            free(buffer);
+
+            int fd = open(filePath, O_RDONLY);
+            if (fd < 0) {
+                printError("Error opening file\n");
+                return;
+            }
+            char *numSongsStr = readUntil('\n', fd);
+            int numSongs = atoi(numSongsStr);
+            free(numSongsStr);
+            for (int i = 0; i < numSongs; i++) {
+                char *songName = readUntil('\n', fd);
+                asprintf(&buffer, "%s\n", songName);
+                printToConsole(buffer);
+                free(buffer);
+                free(songName);
+            }
+            free(filePath);
+            close(fd);
+        }
+    }
+    closedir(dir);
+}
+
+/**
+ * @brief Shows the .mp3 files in the folder
+ * @param folderPath path of the folder where the songs are downloaded without the first slash
+ */
+void checkDownloadedSongs(const char *folderPath){
+    DIR *dir = opendir(folderPath);
+    if (dir == NULL){
+        printError("Error while opening directory\n");
+        return;
+    }
+
+    char *buffer;
+    asprintf(&buffer, "Songs in the %s folder :\n", folderPath);
+    printToConsole(buffer);
+    free(buffer);
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        char *ext = strrchr(entry->d_name, '.');
+        if (ext != NULL && strcmp(ext, ".mp3") == 0) {
+            asprintf(&buffer, "%s\n", entry->d_name);
+            printToConsole(buffer);
+            free(buffer);
+        }
+    }
+    closedir(dir);
+}
+
+/**
+ * @brief Shows the songs and playlists downloaded in the Bowman console
+ */
 void checkDownloads() {
     printToConsole("CHECK DOWNLOADS\n");
+    const char *folderPath = (bowman.folder[0] == '/') ? (bowman.folder + 1) : bowman.folder;
+    checkDownloadedSongs(folderPath);
+
+    checkDownloadedPlaylists(folderPath);
 }
+
+/**
+ * @brief Clears everything in Bowman the folder
+ */
 void clearDownloads() {
     printToConsole("CLEAR DOWNLOADS\n");
+
+    char cwd[1000];
+    if (getcwd(cwd, sizeof(cwd)) == NULL) {
+        printError("Error while getting current directory\n");
+        return;
+    }
+    // remove the first slash if it exists
+    const char *folderPath = (bowman.folder[0] == '/') ? (bowman.folder + 1) : bowman.folder;
+
+    // Change to the directory
+    if (chdir(folderPath) != 0) {
+        printError("Error while changing directory\n");
+        return;
+    }
+
+    // Remove all files in the directory
+    int status = system("rm -v *");
+    if (status == -1) {
+        printError("Error while removing files\n");
+    }
+
+    // Change back to the original directory
+    if (chdir(cwd) != 0) {
+        printError("Error while changing back to original directory\n");
+    }
 }
 void listPlaylists() {
     printToConsole("LIST PLAYLISTS\n");
+    pthread_mutex_lock(&isPooleConnectedMutex);
+    if (isPooleConnected == FALSE) {
+        pthread_mutex_unlock(&isPooleConnectedMutex);
+        printError("You are not connected to Poole\n");
+        return;
+    }
+    pthread_mutex_unlock(&isPooleConnectedMutex);
+
+    SocketMessage m;
+
+    m.type = 0x02;
+    m.headerLength = strlen("LIST_PLAYLISTS");
+    m.header = strdup("LIST_PLAYLISTS");
+    m.data = strdup("");
+
+    sendSocketMessage(pooleSocketFD, m);
+
+    free(m.header);
+    free(m.data);
 }
 void downloadFile(char *file) {
     printToConsole("DOWNLOAD FILE\n");
