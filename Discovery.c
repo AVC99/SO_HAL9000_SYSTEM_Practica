@@ -55,13 +55,17 @@ void closeFds() {
  */
 void closeProgram() {
     // TODO: close threads using pthread_cancel
+    printToConsole("Closing program\n");
+    
     pthread_mutex_lock(&terminateMutex);
     terminate = TRUE;
-    printToConsole("Closing program\n");
     pthread_mutex_unlock(&terminateMutex);
 
+    pthread_detach(bowmanThread);
     pthread_cancel(bowmanThread);
+    pthread_detach(pooleThread);
     pthread_cancel(pooleThread);
+
     freeMemory();
     closeFds();
     exit(0);
@@ -185,7 +189,6 @@ void *listenToBowman() {
                 free(data);
             }
         } else if (strcmp(m.header, "EXIT") == 0) {
-
             pthread_mutex_lock(&poolesMutex);
 
             printToConsole("Bowman disconnected\n");
@@ -202,9 +205,9 @@ void *listenToBowman() {
 
             // TODO: DO LOAD BALANCER SHENANIGANS
             pthread_mutex_lock(&numPoolesMutex);
-            for( int i = 0; i< numPooles; i++){
-                for(int j = 0; j < pooles[i].numOfBowmans; j++){
-                    if(strcmp(pooles[i].bowmans[j], m.data) == 0){
+            for (int i = 0; i < numPooles; i++) {
+                for (int j = 0; j < pooles[i].numOfBowmans; j++) {
+                    if (strcmp(pooles[i].bowmans[j], m.data) == 0) {
                         free(pooles[i].bowmans[j]);
                         pooles[i].bowmans[j] = pooles[i].bowmans[pooles[i].numOfBowmans - 1];
                         pooles[i].numOfBowmans--;
@@ -302,6 +305,7 @@ void *listenToPoole() {
  */
 int main(int argc, char *argv[]) {
     signal(SIGINT, closeProgram);
+    
     if (argc != 2) {
         printError("Error: Wrong number of arguments\n");
         exit(1);

@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include <arpa/inet.h>
 #include <assert.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <netdb.h>
 #include <pthread.h>
@@ -14,7 +15,6 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
-#include <dirent.h>
 
 #include "bowman_thread_handler.h"
 #include "io_utils.h"
@@ -195,9 +195,9 @@ void listSongs() {
  * @brief Shows the .txt files in the folder
  * @param folderPath path of the folder where the playlists are downloaded without the first slash
  */
-void checkDownloadedPlaylists(const char *folderPath){
+void checkDownloadedPlaylists(const char *folderPath) {
     DIR *dir = opendir(folderPath);
-    if (dir == NULL){
+    if (dir == NULL) {
         printError("Error while opening directory\n");
         return;
     }
@@ -213,7 +213,7 @@ void checkDownloadedPlaylists(const char *folderPath){
         if (ext != NULL && strcmp(ext, ".txt") == 0) {
             char *filePath;
             asprintf(&filePath, "%s/%s", folderPath, entry->d_name);
-            
+
             asprintf(&buffer, "Playlist : %s\n", entry->d_name);
             printToConsole(buffer);
             free(buffer);
@@ -221,18 +221,20 @@ void checkDownloadedPlaylists(const char *folderPath){
             int fd = open(filePath, O_RDONLY);
             if (fd < 0) {
                 printError("Error opening file\n");
-                return;
+                continue;
+            } else {
+                char *numSongsStr = readUntil('\n', fd);
+                int numSongs = atoi(numSongsStr);
+                free(numSongsStr);
+                for (int i = 0; i < numSongs; i++) {
+                    char *songName = readUntil('\n', fd);
+                    asprintf(&buffer, "%s\n", songName);
+                    printToConsole(buffer);
+                    free(buffer);
+                    free(songName);
+                }
             }
-            char *numSongsStr = readUntil('\n', fd);
-            int numSongs = atoi(numSongsStr);
-            free(numSongsStr);
-            for (int i = 0; i < numSongs; i++) {
-                char *songName = readUntil('\n', fd);
-                asprintf(&buffer, "%s\n", songName);
-                printToConsole(buffer);
-                free(buffer);
-                free(songName);
-            }
+
             free(filePath);
             close(fd);
         }
@@ -244,9 +246,9 @@ void checkDownloadedPlaylists(const char *folderPath){
  * @brief Shows the .mp3 files in the folder
  * @param folderPath path of the folder where the songs are downloaded without the first slash
  */
-void checkDownloadedSongs(const char *folderPath){
+void checkDownloadedSongs(const char *folderPath) {
     DIR *dir = opendir(folderPath);
-    if (dir == NULL){
+    if (dir == NULL) {
         printError("Error while opening directory\n");
         return;
     }
