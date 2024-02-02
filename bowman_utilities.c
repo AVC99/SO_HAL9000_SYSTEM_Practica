@@ -28,6 +28,7 @@ pthread_t listenThread;
 
 /**
  * @brief Connects to the Poole server with stable connection
+ * @param response message received from the Discovery server
  */
 void connectToPoole(SocketMessage response) {
     printToConsole("Connecting to Poole\n");
@@ -79,17 +80,20 @@ void connectToPoole(SocketMessage response) {
 
     if (pooleResponse.type == 0x01 && strcmp(pooleResponse.header, "CON_OK") == 0) {
         printToConsole("Poole connected to Bowman\n");
+
         pthread_mutex_lock(&isPooleConnectedMutex);
         isPooleConnected = TRUE;
         pthread_mutex_unlock(&isPooleConnectedMutex);
-
+        
         // Start listening to Poole no need to pass the socket file descriptor to the thread
-        // because it is a global variable
+        // because it is a extern global variable
         if (pthread_create(&listenThread, NULL, listenToPoole, NULL) != 0) {
             printError("Error creating thread\n");
             close(pooleSocketFD);
             exit(1);
         }
+
+        pthread_detach(listenThread);
 
     } else {
         printError("Error connecting to Poole\n");
@@ -98,11 +102,12 @@ void connectToPoole(SocketMessage response) {
     free(pooleResponse.header);
     free(pooleResponse.data);
 
-    // IMPORTANT: response is freed in the main function
+    //! IMPORTANT: response is freed in the main function
 }
 
 /**
  * @brief Connects to the Discovery server with unstable connection
+ * @param isExit to know if the Bowman is exiting (need to send disconnect to Discovery) or not (need to connect to Poole)
  */
 int connectToDiscovery(int isExit) {
     printToConsole("CONNECT\n");
@@ -312,6 +317,9 @@ void clearDownloads() {
         printError("Error while changing back to original directory\n");
     }
 }
+/**
+ * @brief Sends LIST_PLAYLISTS message to Poole
+ */
 void listPlaylists() {
     printToConsole("LIST PLAYLISTS\n");
     pthread_mutex_lock(&isPooleConnectedMutex);
@@ -334,15 +342,71 @@ void listPlaylists() {
     free(m.header);
     free(m.data);
 }
+/**
+ * @brief Sends the message to Poole to download a file
+ * @param file name of the file to download
+ */
 void downloadFile(char *file) {
     printToConsole("DOWNLOAD FILE\n");
+
+    pthread_mutex_lock(&isPooleConnectedMutex);
+    if (isPooleConnected == FALSE) {
+        pthread_mutex_unlock(&isPooleConnectedMutex);
+        printError("You are not connected to Poole\n");
+        return;
+    }
+    pthread_mutex_unlock(&isPooleConnectedMutex);
+
     char *buffer;
     asprintf(&buffer, "Downloading file: %s\n", file);
     printToConsole(buffer);
     free(buffer);
+
+    char *extension = strrchr(file, '.');
+    if (extension != NULL) {
+        if (strcmp(extension, ".mp3") == 0) {
+            printToConsole("Downloading song\n");
+
+            SocketMessage m;
+
+            m.type = 0x03;
+            m.headerLength = strlen("DOWNLOAD_SONG");
+            m.header = strdup("DOWNLOAD_SONG");
+            m.data = strdup(file);
+
+            sendSocketMessage(pooleSocketFD, m);
+
+            free(m.header);
+            free(m.data);
+
+        } else if (strcmp(extension, ".txt") == 0) {
+            printToConsole("Downloading playlist\n");
+
+            SocketMessage m;
+
+            m.type = 0x03;
+            m.headerLength = strlen("DOWNLOAD_LIST");
+            m.header = strdup("DOWNLOAD_LIST");
+            m.data = strdup(file);
+
+            sendSocketMessage(pooleSocketFD, m);
+
+            free(m.header);
+            free(m.data);
+
+        } else {
+            printError("Unknown file type. Only .mp3 for songs and .txt for playlists\n");
+        }
+    } else {
+        printError("File has no extension\n");
+    }
 }
+/**
+ * @brief If the Bowman is connected to the Poole server, it disconnects from it and sends a message to the Discovery server
+ */
 void logout() {
     printToConsole("LOGOUT\n");
+
     pthread_mutex_lock(&isPooleConnectedMutex);
     if (isPooleConnected == TRUE) {
         pthread_mutex_unlock(&isPooleConnectedMutex);

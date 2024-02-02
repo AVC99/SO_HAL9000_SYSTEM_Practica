@@ -4,10 +4,10 @@
 
 // arnau.vives joan.medina I3_6
 /**
- * @brief Sends a message through a socket
+ * @brief Sends a message through a socket this does not work with sending files
  * @param socketFD The socket file descriptor
  * @param message The message to send
-*/
+ */
 void sendSocketMessage(int socketFD, SocketMessage message) {
     char *buffer = malloc(sizeof(char) * 256);
     buffer[0] = message.type;
@@ -27,11 +27,48 @@ void sendSocketMessage(int socketFD, SocketMessage message) {
 
     int start_j = strlen(message.data) + start_i;
     for (int j = 0; j < 256 - start_j; j++) {
-        buffer[j + start_j] = '%';
+        buffer[j + start_j] = '\0';
         // printf("buffer[%d] = %c\n", j + start_j, buffer[j + start_j]);
     }
 
     write(socketFD, buffer, 256);
+    free(buffer);
+}
+/**
+ * @brief Sends a file (99.9% a chunk of file) through a socket
+ * @param socketFD The socket file descriptor
+ * @param message The message to send
+ * @param dataLength The length of the data
+ */
+void sendSocketFile(int socketFD, SocketMessage message, int dataLength) {
+    char *buffer = malloc(sizeof(char) * 256);
+    buffer[0] = message.type;
+    buffer[1] = (message.headerLength & 0xFF);
+    buffer[2] = ((message.headerLength >> 8) & 0xFF);
+    size_t dataLength_ = (size_t)dataLength;
+
+    for (size_t i = 0; i < message.headerLength; i++) {
+        buffer[i + 3] = message.header[i];
+    }
+
+    size_t start_i = 3 + message.headerLength;
+    for (size_t i = 0; i < dataLength_ && message.data != NULL; i++) {
+        buffer[i + start_i] = message.data[i];
+    }
+
+    size_t start_j = dataLength_ + start_i;
+    int paddingCounter = 0;
+    for (size_t j = 0; j < 256 - start_j; j++) {
+        buffer[j + start_j] = '\0';
+        printToConsole("I ADDED PADDING\n");
+        paddingCounter++;
+    }
+    printf("Padding added: %d\n", paddingCounter);
+
+    ssize_t bytesWritten = write(socketFD, buffer, 256);
+    if (bytesWritten < 0) {
+        printError("Error writing to the socket\n");
+    }
     free(buffer);
 }
 
@@ -40,7 +77,7 @@ void sendSocketMessage(int socketFD, SocketMessage message) {
  * @param IP The IP address of the server
  * @param port The port of the server
  * @return The socket file descriptor
-*/
+ */
 int createAndConnectSocket(char *IP, int port) {
     char *buffer;
     asprintf(&buffer, "Creating and connecting socket on %s:%d\n", IP, port);
@@ -86,7 +123,7 @@ int createAndConnectSocket(char *IP, int port) {
  * @brief Creates a socket and listens to it
  * @param IP The IP address of the server
  * @param port The port of the server
-*/
+ */
 int createAndListenSocket(char *IP, int port) {
     char *buffer;
     asprintf(&buffer, "Creating socket on %s:%d\n", IP, port);
@@ -141,9 +178,14 @@ int createAndListenSocket(char *IP, int port) {
 SocketMessage getSocketMessage(int clientFD) {
     char *buffer;
     SocketMessage message;
+    ssize_t numBytes;
+
     // get the type
     uint8_t type;
-    read(clientFD, &type, 1);
+    numBytes = read(clientFD, &type, 1);
+    if (numBytes < 1) {
+        printError("Error reading the type\n");
+    }
     asprintf(&buffer, "Type: 0x%02x\n", type);
     printToConsole(buffer);
     free(buffer);
@@ -151,7 +193,10 @@ SocketMessage getSocketMessage(int clientFD) {
 
     // get the header length
     uint16_t headerLength;
-    read(clientFD, &headerLength, sizeof(unsigned short));
+    numBytes = read(clientFD, &headerLength, sizeof(unsigned short));
+    if (numBytes < (ssize_t)sizeof(unsigned short)) {
+        printError("Error reading the header length\n");
+    }
     asprintf(&buffer, "Header length: %u\n", headerLength);
     printToConsole(buffer);
     free(buffer);
@@ -159,7 +204,11 @@ SocketMessage getSocketMessage(int clientFD) {
 
     // get the header
     char *header = malloc(sizeof(char) * headerLength + 1);
-    read(clientFD, header, headerLength);
+    numBytes = read(clientFD, header, headerLength);
+    if (numBytes < headerLength) {
+        printError("Error reading the header\n");
+        free(header);
+    }
     header[headerLength] = '\0';
     asprintf(&buffer, "Header: %s\n", header);
     printToConsole(buffer);
@@ -169,12 +218,10 @@ SocketMessage getSocketMessage(int clientFD) {
 
     // get the data
     char *data = malloc(sizeof(char) * 256 - 3 - headerLength + 1);
-    read(clientFD, data, 256 - 3 - headerLength);
-    // remove the '%' characters
-    for (int i = 0; i < 256 - 3 - headerLength; i++) {
-        if (data[i] == '%') {
-            data[i] = '\0';
-        }
+    numBytes = read(clientFD, data, 256 - 3 - headerLength);
+    if (numBytes < 256 - 3 - headerLength) {
+        printError("Error reading the data\n");
+        free(data);
     }
     asprintf(&buffer, "Data: %s\n", data);
     printToConsole(buffer);
@@ -188,7 +235,7 @@ SocketMessage getSocketMessage(int clientFD) {
 /**
  * @brief Sends the default error message through a socket
  * @param clientFD The socket file descriptor
-*/
+ */
 void sendError(int clientFD) {
     SocketMessage message;
     message.type = 0x07;

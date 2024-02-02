@@ -17,3 +17,5 @@ char *readUntil(char del, int fd);
 void printArray(char *array);
 char *get_md5sum(char *filename);
 long long get_file_size(char *filename);
+char *getMD5sum(char *fileName);
+int getRand(int min, int max);

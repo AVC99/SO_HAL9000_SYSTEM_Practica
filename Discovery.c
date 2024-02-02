@@ -19,6 +19,7 @@ pthread_t bowmanThread, pooleThread;
 pthread_mutex_t terminateMutex = PTHREAD_MUTEX_INITIALIZER, numPoolesMutex = PTHREAD_MUTEX_INITIALIZER,
                 poolesMutex = PTHREAD_MUTEX_INITIALIZER;
 PooleServer *pooles;
+
 /**
  * @brief Frees the memory allocated for the Discovery struct
  */
@@ -54,17 +55,18 @@ void closeFds() {
  * @brief Closes the program correctly cleaning the memory and closing the file descriptors
  */
 void closeProgram() {
-    // TODO: close threads using pthread_cancel
     printToConsole("Closing program\n");
-    
+
     pthread_mutex_lock(&terminateMutex);
     terminate = TRUE;
     pthread_mutex_unlock(&terminateMutex);
 
+
+    pthread_cancel(bowmanThread);    
     pthread_detach(bowmanThread);
-    pthread_cancel(bowmanThread);
-    pthread_detach(pooleThread);
+    
     pthread_cancel(pooleThread);
+    pthread_detach(pooleThread);
 
     freeMemory();
     closeFds();
@@ -108,7 +110,9 @@ void saveDiscovery(char *filename) {
     free(port);
     close(inputFileFd);
 }
-
+/**
+ * @brief Listens to the Bowman server and sends the information of the Poole server with less Bowmans
+ */
 void *listenToBowman() {
     printToConsole("Listening to Bowman\n");
 
@@ -203,7 +207,6 @@ void *listenToBowman() {
             free(response.header);
             free(response.data);
 
-            // TODO: DO LOAD BALANCER SHENANIGANS
             pthread_mutex_lock(&numPoolesMutex);
             for (int i = 0; i < numPooles; i++) {
                 for (int j = 0; j < pooles[i].numOfBowmans; j++) {
@@ -229,7 +232,9 @@ void *listenToBowman() {
 
     return NULL;
 }
-
+/**
+ * @brief Listens to the Poole server and adds it to the list
+ */
 void *listenToPoole() {
     printToConsole("Listening to Poole\n");
 
@@ -291,6 +296,36 @@ void *listenToPoole() {
 
             pthread_mutex_unlock(&poolesMutex);
             pthread_mutex_unlock(&numPoolesMutex);
+        }else if (strcmp(m.header, "EXIT_POOLE") == 0){
+            printToConsole("Poole disconnected\n");
+
+            SocketMessage response;
+            response.type = 0x06;
+            response.headerLength = strlen("EXIT_OK");
+            response.header = strdup("EXIT_OK");
+            response.data = strdup("");
+
+            sendSocketMessage(pooleSocketFD, response);
+
+            free(response.header);
+            free(response.data);
+
+            pthread_mutex_lock(&numPoolesMutex);
+            for (int i = 0; i < numPooles; i++) {
+                if (strcmp(pooles[i].pooleServername, m.data) == 0) {
+                    free(pooles[i].pooleServername);
+                    free(pooles[i].pooleIP);
+                    for (int j = 0; j < pooles[i].numOfBowmans; j++) {
+                        free(pooles[i].bowmans[j]);
+                    }
+                    free(pooles[i].bowmans);
+                    pooles[i] = pooles[numPooles - 1];
+                    numPooles--;
+                    break;
+                }
+            }
+            pthread_mutex_unlock(&numPoolesMutex);
+            
         }
 
         close(pooleSocketFD);
@@ -305,7 +340,7 @@ void *listenToPoole() {
  */
 int main(int argc, char *argv[]) {
     signal(SIGINT, closeProgram);
-    
+
     if (argc != 2) {
         printError("Error: Wrong number of arguments\n");
         exit(1);
@@ -323,7 +358,7 @@ int main(int argc, char *argv[]) {
         printError("Error creating Poole thread\n");
         exit(1);
     }
-
+    
     pthread_join(bowmanThread, NULL);
     pthread_join(pooleThread, NULL);
 
