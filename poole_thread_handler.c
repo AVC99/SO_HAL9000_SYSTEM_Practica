@@ -204,6 +204,7 @@ void listPlaylists(int bowmanSocket) {
             }
             close(playlistfd);
             strcat(data, "#");
+
             if (dataLength + 1 > remainingBufferSize) {  // +2 for the & and #
                 m.data = strdup(data);
                 //! REMOVE THIS
@@ -412,7 +413,7 @@ int processBowmanMessage(SocketMessage message, int bowmanSocket) {
                 listPlaylists(bowmanSocket);
                 printToConsole("LIST PLAYLISTS\n");
             } else {
-                printError("Error processing message from Bowman 1\n");
+                printError("Error processing message from Bowman type 0x02\n");
                 sendError(bowmanSocket);
             }
             break;
@@ -427,7 +428,7 @@ int processBowmanMessage(SocketMessage message, int bowmanSocket) {
                 printToConsole("DOWNLOAD PLAYLIST\n");
 
             } else {
-                printError("Error processing message from Bowman 2\n");
+                printError("Error processing message from Bowman type 0x03\n");
                 sendError(bowmanSocket);
             }
             break;
@@ -452,7 +453,7 @@ int processBowmanMessage(SocketMessage message, int bowmanSocket) {
 
                 return TRUE;
             } else {
-                printError("Error processing message from Bowman 3 \n");
+                printError("Error processing message from Bowman type 0x06\n");
                 SocketMessage response;
                 response.type = 0x06;
                 response.headerLength = strlen("CON_KO");
@@ -469,7 +470,7 @@ int processBowmanMessage(SocketMessage message, int bowmanSocket) {
             break;
         }
         default: {
-            printError("Error processing message from Bowman 4\n");
+            printError("Error processing message from Bowman delfault\n");
             sendError(bowmanSocket);
             return TRUE;
             break;
