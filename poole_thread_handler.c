@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -203,6 +204,7 @@ void listPlaylists(int bowmanSocket) {
             }
             close(playlistfd);
             strcat(data, "#");
+
             if (dataLength + 1 > remainingBufferSize) {  // +2 for the & and #
                 m.data = strdup(data);
                 //! REMOVE THIS
@@ -253,6 +255,147 @@ void listPlaylists(int bowmanSocket) {
         exit(1);
     }
 }
+void sendFile(char *fileName, int bowmanSocket, int ID) {
+    char *songPath;
+    char *folderPath = (poole.folder[0] == '/') ? (poole.folder + 1) : poole.folder;
+    asprintf(&songPath, "%s/%s", folderPath, fileName);
+    int songfd = open(songPath, O_RDONLY | O_NONBLOCK);
+    free(songPath);
+
+    if (songfd < 0) {
+        printError("Error: File not found\n");
+        sendError(bowmanSocket);
+        return;
+    }
+    char *idString;
+    asprintf(&idString, "%d", ID);
+    int idStringLength = strlen(idString);
+    ssize_t bytesRead;
+    // char *buffer;
+    char c;
+    char *data = malloc(FILE_MAX_DATA_SIZE - 2);
+    int dataLength = 0;
+
+    for (int i = 0; i < idStringLength; i++) {
+        data[dataLength] = idString[i];
+        dataLength++;
+    }
+    data[dataLength] = '&';
+    dataLength++;
+
+    while ((bytesRead = read(songfd, &c, 1)) > 0) {
+        if (bytesRead < 0) {
+            printError("Error reading from file\n");
+            sendError(bowmanSocket);
+            return;
+        }
+
+        if ((size_t)dataLength < FILE_MAX_DATA_SIZE - 2) {
+            data[dataLength] = c;
+            dataLength++;
+        }
+
+        if (dataLength == FILE_MAX_DATA_SIZE - 2) {
+            SocketMessage m;
+            m.type = 0x04;
+            m.headerLength = strlen("FILE_DATA");
+            m.header = strdup("FILE_DATA");
+            m.dataLength = dataLength;
+            m.data = malloc(dataLength);
+            memcpy(m.data, data, dataLength);
+            sendSocketFile(bowmanSocket, m, dataLength);
+            printToConsole("Sending START/MID message to Bowman\n");
+            free(m.header);
+            free(m.data);
+            dataLength = 0;
+            for (int i = 0; i < idStringLength; i++) {
+                data[dataLength] = idString[i];
+                dataLength++;
+            }
+            data[dataLength] = '&';
+            dataLength++;
+        }
+    }
+    if (dataLength > 0) {
+        SocketMessage m;
+        m.type = 0x04;
+        m.headerLength = strlen("FILE_DATA");
+        m.header = strdup("FILE_DATA");
+        m.data = malloc(dataLength);
+        m.dataLength = dataLength;
+        memcpy(m.data, data, dataLength);
+        sendSocketFile(bowmanSocket, m, dataLength);
+        printToConsole("Sending END message to Bowman\n");
+        free(m.header);
+        free(m.data);
+    }
+    free(data);
+    close(songfd);
+}
+
+/**
+ * @brief Sends the the filename, the file size, the MD5 hash and an id to Bowman
+ * @param songName The name of the song
+ * @param bowmanSocket The socket of the Bowman
+ */
+int sendFileInfo(char *songName, int bowmanSocket) {
+    struct stat st;
+    char *folderPath = (poole.folder[0] == '/') ? (poole.folder + 1) : poole.folder;
+    if (chdir(folderPath) < 0) {
+        printError("Error changing directory\n");
+        sendError(bowmanSocket);
+        return -1;
+    }
+    if (stat(songName, &st) < 0) {
+        printError("Error getting file info\n");
+        sendError(bowmanSocket);
+        return -1;
+    }
+    // get the md5 hash
+    char *md5Hash = getMD5sum(songName);
+    char *buffer;
+    asprintf(&buffer, "md5sum %s", md5Hash);
+    printToConsole(buffer);
+    free(buffer);
+
+    asprintf(&buffer, "File size: %ld\n", st.st_size);
+    printToConsole(buffer);
+    free(buffer);
+
+    int randomId = getRand(0, 1000);
+
+    SocketMessage m;
+    m.type = 0x04;
+    m.headerLength = strlen("NEW_FILE");
+    m.header = strdup("NEW_FILE");
+    char *data;
+    asprintf(&data, "%s&%ld&%s&%d", songName, st.st_size, md5Hash, randomId);
+    printToConsole(data);
+    m.data = strdup(data);
+
+    sendSocketMessage(bowmanSocket, m);
+
+    free(m.header);
+    free(m.data);
+
+    if (chdir("..") < 0) {
+        printError("Error changing back directory\n");
+        sendError(bowmanSocket);
+        return -1;
+    }
+    return randomId;
+}
+
+/**
+ * @brief Sends the song data to the Bowman through the socket
+ * @param songName The name of the song
+ * @param bowmanSocket The socket of the Bowman
+ */
+void downloadSong(char *songName, int bowmanSocket) {
+    printToConsole("Downloading song\n");
+    int ID = sendFileInfo(songName, bowmanSocket);
+    sendFile(songName, bowmanSocket, ID);
+}
 
 /**
  * @brief Processes the message received from the Bowman and returns if the thread should terminate
@@ -270,22 +413,22 @@ int processBowmanMessage(SocketMessage message, int bowmanSocket) {
                 listPlaylists(bowmanSocket);
                 printToConsole("LIST PLAYLISTS\n");
             } else {
-                printError("Error processing message from Bowman\n");
+                printError("Error processing message from Bowman type 0x02\n");
                 sendError(bowmanSocket);
             }
             break;
         }
         case 0x03: {
             if (strcmp(message.header, "DOWNLOAD_SONG") == 0) {
-                // downloadSong(message.data, bowmanSocket);
+                downloadSong(message.data, bowmanSocket);
                 printToConsole("DOWNLOAD SONG\n");
 
-            } else if (strcmp(message.header, "DOWNLOAD_PLAYLIST") == 0) {
+            } else if (strcmp(message.header, "DOWNLOAD_LIST") == 0) {
                 // downloadPlaylist(message.data, bowmanSocket);
                 printToConsole("DOWNLOAD PLAYLIST\n");
 
             } else {
-                printError("Error processing message from Bowman\n");
+                printError("Error processing message from Bowman type 0x03\n");
                 sendError(bowmanSocket);
             }
             break;
@@ -310,7 +453,7 @@ int processBowmanMessage(SocketMessage message, int bowmanSocket) {
 
                 return TRUE;
             } else {
-                printError("Error processing message from Bowman\n");
+                printError("Error processing message from Bowman type 0x06\n");
                 SocketMessage response;
                 response.type = 0x06;
                 response.headerLength = strlen("CON_KO");
@@ -327,7 +470,7 @@ int processBowmanMessage(SocketMessage message, int bowmanSocket) {
             break;
         }
         default: {
-            printError("Error processing message from Bowman\n");
+            printError("Error processing message from Bowman delfault\n");
             sendError(bowmanSocket);
             return TRUE;
             break;

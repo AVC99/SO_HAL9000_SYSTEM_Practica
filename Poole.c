@@ -43,10 +43,142 @@ void closeFds() {
     }
 }
 /**
+ * @brief Listens for stable bowman connections
+ */
+void listenForBowmans() {
+    if ((bowmanSocketFD = createAndListenSocket(poole.pooleIP, poole.poolePort)) < 0) {
+        printError("Error connecting to Bowman\n");
+        exit(1);
+    }
+
+    pthread_mutex_lock(&terminateMutex);
+    while (terminate == FALSE) {
+        pthread_mutex_unlock(&terminateMutex);
+        printToConsole("Listening for Bowmans...\n");
+
+        int bowmanSocket = accept(bowmanSocketFD, NULL, NULL);
+
+        if (bowmanSocket < 0) {
+            printError("Error accepting Bowman\n");
+            exit(1);
+        }
+        printToConsole("Bowman connected\n");
+
+        // Allocate a new int on the heap and pass it tho the new thread
+        SocketMessage m = getSocketMessage(bowmanSocket);
+        printToConsole("Received message from Bowman\n");
+
+        free(m.header);
+        free(m.data);
+
+        pthread_mutex_lock(&numThreadsMutex);
+        if (numThreads < MAX_THREADS) {
+            int *pBowmanSocket = malloc(sizeof(int));
+            *pBowmanSocket = bowmanSocket;
+            if (pthread_create(&threads[numThreads], NULL, bowmanThreadHandler, pBowmanSocket) != 0) {
+                printError("Error creating thread\n");
+                close(bowmanSocket);
+                free(pBowmanSocket);
+                exit(1);
+            } else {
+                numThreads++;
+                pthread_detach(threads[numThreads - 1]);
+            }
+        } else {
+            printError("Error: Maximum number of threads reached\n");
+        }
+        pthread_mutex_unlock(&numThreadsMutex);
+    }
+    pthread_mutex_unlock(&terminateMutex);
+    close(bowmanSocketFD);
+}
+
+/**
+ * @brief Connects to the Discovery server with unstable connection
+ * @param isExit If the program is exiting
+ */
+void connectToDiscovery(int isExit) {
+    printToConsole("Connecting to Discovery\n");
+
+    if ((discoverySocketFD = createAndConnectSocket(poole.discoveryIP, poole.discoveryPort)) < 0) {
+        printError("Error connecting to Discovery\n");
+        exit(1);
+    }
+
+    // CONNECTED TO DISCOVERY
+    printToConsole("Connected to Discovery\n");
+
+    if (isExit == FALSE) {
+        SocketMessage m;
+        m.type = 0x01;
+        m.headerLength = strlen("NEW_POOLE");
+        m.header = strdup("NEW_POOLE");
+        char *data;
+
+        asprintf(&data, "%s&%d&%s", poole.servername, poole.poolePort, poole.pooleIP);
+        m.data = strdup(data);
+
+        sendSocketMessage(discoverySocketFD, m);
+
+        free(m.header);
+        free(m.data);
+        free(data);
+    } else if (isExit == TRUE) {
+        SocketMessage m;
+        m.type = 0x06;
+        m.headerLength = strlen("EXIT_POOLE");
+        m.header = strdup("EXIT_POOLE");
+        m.data = strdup("");
+
+        sendSocketMessage(discoverySocketFD, m);
+
+        free(m.header);
+    }
+
+    printToConsole("Sent message to Discovery\n");
+    // ! FIXME : WHEN CTRL+C IS PRESSED THIS HAS MEMORY LEAKS
+    // Receive response
+    SocketMessage response = getSocketMessage(discoverySocketFD);
+
+    // handle response
+    switch (response.type) {
+        case 0x01:
+            if (strcmp(response.header, "CON_OK") == 0) {
+                printToConsole("Connection to Discovery successful\n");
+                listenForBowmans();
+            } else if (strcmp(response.header, "CON_KO") == 0) {
+                printError("Connection to Discovery failed\n");
+            }
+            break;
+        case 0x06:
+            if (strcmp(response.header, "EXIT_OK") == 0) {
+                printToConsole("Exit from Discovery successful\n");
+            } else {
+                printError("Exit from Discovery failed\n");
+            }
+            break;
+        default:
+            printError("Error: Wrong message type\n");
+            break;
+    }
+
+    free(response.header);
+    free(response.data);
+
+    close(discoverySocketFD);
+}
+
+/**
  * @brief Closes the program correctly cleaning the memory and closing the file descriptors
  */
 void closeProgram() {
     // TODO: close threads using pthread_cancel
+    pthread_mutex_lock(&terminateMutex);
+    terminate = TRUE;
+    pthread_mutex_unlock(&terminateMutex);
+
+    connectToDiscovery(TRUE);
+
     printToConsole("Closing program\n");
     freeMemory();
     closeFds();
@@ -125,120 +257,11 @@ void phaseOneTesting() {
     free(buffer);
 }
 
-/**
- * @brief Listens for stable bowman connections
- */
-void listenForBowmans() {
-    if ((bowmanSocketFD = createAndListenSocket(poole.pooleIP, poole.poolePort)) < 0) {
-        printError("Error connecting to Bowman\n");
-        exit(1);
-    }
-
-    pthread_mutex_lock(&terminateMutex);
-    while (terminate == FALSE) {
-        pthread_mutex_unlock(&terminateMutex);
-        printToConsole("Listening for Bowmans...\n");
-
-        int bowmanSocket = accept(bowmanSocketFD, NULL, NULL);
-
-        if (bowmanSocket < 0) {
-            printError("Error accepting Bowman\n");
-            exit(1);
-        }
-        printToConsole("Bowman connected\n");
-
-        // Allocate a new int on the heap and pass it tho the new thread
-        SocketMessage m = getSocketMessage(bowmanSocket);
-        printToConsole("Received message from Bowman\n");
-        char *buffer;
-        asprintf(&buffer, "Message type: %d\n", m.type);
-        printToConsole(buffer);
-        free(buffer);
-        free(m.header);
-        free(m.data);
-
-        pthread_mutex_lock(&numThreadsMutex);
-        if (numThreads < MAX_THREADS) {
-            int *pBowmanSocket = malloc(sizeof(int));
-            *pBowmanSocket = bowmanSocket;
-            if (pthread_create(&threads[numThreads], NULL, bowmanThreadHandler, pBowmanSocket) != 0) {
-                printError("Error creating thread\n");
-                close(bowmanSocket);
-                free(pBowmanSocket);
-                exit(1);
-            } else {
-                numThreads++;
-            }
-        } else {
-            printError("Error: Maximum number of threads reached\n");
-        }
-        pthread_mutex_unlock(&numThreadsMutex);
-    }
-    pthread_mutex_unlock(&terminateMutex);
-    close(bowmanSocketFD);
-}
-
-/**
- * @brief Connects to the Discovery server with unstable connection
- */
-void connectToDiscovery() {
-    printToConsole("Connecting to Discovery\n");
-
-    if ((discoverySocketFD = createAndConnectSocket(poole.discoveryIP, poole.discoveryPort)) < 0) {
-        printError("Error connecting to Discovery\n");
-        exit(1);
-    }
-
-    // CONNECTED TO DISCOVERY
-    printToConsole("Connected to Discovery\n");
-
-    SocketMessage m;
-    m.type = 0x01;
-    m.headerLength = strlen("NEW_POOLE");
-    m.header = strdup("NEW_POOLE");
-    char *data;
-
-    asprintf(&data, "%s&%d&%s", poole.servername, poole.poolePort, poole.pooleIP);
-    m.data = strdup(data);
-
-    sendSocketMessage(discoverySocketFD, m);
-
-    free(m.header);
-    free(m.data);
-    free(data);
-
-    printToConsole("Sent message to Discovery\n");
-    // ! FIXME : WHEN CTRL+C IS PRESSED THIS HAS MEMORY LEAKS
-    // Receive response
-    SocketMessage response = getSocketMessage(discoverySocketFD);
-
-    // handle response
-    switch (response.type) {
-        case 0x01:
-            if (strcmp(response.header, "CON_OK") == 0) {
-                printToConsole("Connection to Discovery successful\n");
-                listenForBowmans();
-            } else if (strcmp(response.header, "CON_KO") == 0) {
-                printError("Connection to Discovery failed\n");
-            }
-            break;
-        default:
-            printError("Error: Wrong message type\n");
-            break;
-    }
-
-    free(response.header);
-    free(response.data);
-
-    close(discoverySocketFD);
-}
-
 int main(int argc, char *argv[]) {
     if (argc < 2) {
         printError("Error: Missing arguments\n");
         return 1;
     }
-
     // reprogram SIGINT signal
     signal(SIGINT, closeProgram);
 
@@ -246,7 +269,7 @@ int main(int argc, char *argv[]) {
     phaseOneTesting();
 
     // connect to Discovery
-    connectToDiscovery();
+    connectToDiscovery(FALSE);
     // TODO : CREATE MONOLIT (FORK) PHASE 4
     closeProgram();
     return 0;

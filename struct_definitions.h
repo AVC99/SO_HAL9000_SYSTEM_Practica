@@ -8,12 +8,14 @@
 #define DOWNLOAD_SONG_PORT 8054
 #define BUFFER_SIZE 256
 #define MAX_BOWMANS 20
+#define FILE_MAX_DATA_SIZE (BUFFER_SIZE - 3 - strlen("FILE_DATA"))
 typedef struct
 {
     uint8_t type;
     uint16_t headerLength;
     char *header;
     char *data;
+    int dataLength;
 } SocketMessage;
 
 typedef struct
@@ -59,6 +61,9 @@ typedef struct {
 
 } ThreadInfo;
 
-
+typedef struct {
+    long ID;
+    char data[BUFFER_SIZE - 3 - 9];
+} queueMessage;
 
 #endif  // STRUCT_DEFINITIONS_H
