@@ -11,6 +11,7 @@
 #include "network_utils.h"
 #include "poole_thread_handler.h"
 #include "struct_definitions.h"
+#include "helper.h"
 #define MAX_THREADS 50
 
 volatile int terminate = FALSE;
@@ -28,6 +29,31 @@ void freeMemory() {
     free(poole.discoveryIP);
     free(poole.pooleIP);
 }
+
+/**
+ * @brief Initialize the semaphore and shared memory for Monolithic
+*/
+void initStats() {
+    int shmId = shmget(IPC_PRIVATE, sizeof(SharedStats), IPC_CREAT | 0666);
+    if (shmId < 0) {
+        perror("shmget");
+        exit(1);
+    }
+
+    sharedStats = (SharedStats *)shmat(shmId, NULL, 0);
+    if (sharedStats == (void *)-1) {
+        perror("shmat");
+        exit(1);
+    }
+
+    if (sem_init(&statsSem, 1, 1) < 0) {
+        perror("sem_init");
+        exit(1);
+    }
+
+    memset(sharedStats->downloadCounts, 0, sizeof(sharedStats->downloadCounts));
+}
+
 /**
  * @brief Closes the file descriptors if they are open
  */
@@ -172,9 +198,11 @@ void connectToDiscovery(int isExit) {
  * @brief Closes the program correctly cleaning the memory and closing the file descriptors
  */
 void closeProgram() {
-    // TODO: close threads using pthread_cancel
     pthread_mutex_lock(&terminateMutex);
     terminate = TRUE;
+    for(int i = 0; i < numThreads; i++){
+        pthread_cancel(threads[i]);
+    }
     pthread_mutex_unlock(&terminateMutex);
 
     connectToDiscovery(TRUE);
@@ -257,6 +285,27 @@ void phaseOneTesting() {
     free(buffer);
 }
 
+/**
+ * @brief Create and set monolithic process (Phase 4)
+*/
+void createMonolithProcess() {
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("fork");
+        exit(1);
+    } else if (pid == 0) {
+        while (!terminate) {
+            sem_wait(&statsSem);
+            for (int i = 0; i < MAX_SONGS; i++) {
+                printf("Song: %s, Downloads: %d\n", sharedStats->songNames[i], sharedStats->downloadCounts[i]);
+            }
+            sem_post(&statsSem);
+            sleep(10);
+        }
+        exit(0);
+    }
+}
+
 int main(int argc, char *argv[]) {
     if (argc < 2) {
         printError("Error: Missing arguments\n");
@@ -270,7 +319,9 @@ int main(int argc, char *argv[]) {
 
     // connect to Discovery
     connectToDiscovery(FALSE);
-    // TODO : CREATE MONOLIT (FORK) PHASE 4
+    
+    initStats();
+    createMonolithProcess();
     closeProgram();
     return 0;
 }

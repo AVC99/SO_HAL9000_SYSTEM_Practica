@@ -25,3 +25,4 @@ void clearDownloads();
 void listPlaylists();
 void downloadFile(char *file);
 void logout();
+void incrementDownloadCount(const char *songName);
