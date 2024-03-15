@@ -144,9 +144,9 @@ void* listenToPoole(void* arg) {
     pthread_mutex_lock(&isPooleConnectedMutex);
     while (isPooleConnected == TRUE) {
         pthread_mutex_unlock(&isPooleConnectedMutex);
-        if (recv(pooleSocketFD, buffer, sizeof(buffer), MSG_PEEK | MSG_DONTWAIT) == 0) {
+        if (recv(pooleSocketFD, buffer, sizeof(buffer), MSG_PEEK | MSG_DONTWAIT) <= 0) {
             // The recv function returned 0, which means the socket has been closed
-            printToConsole("Socket has been closed\n");
+            // printToConsole("Socket has been closed\n");
             break;
         }
         response = getSocketMessage(pooleSocketFD);

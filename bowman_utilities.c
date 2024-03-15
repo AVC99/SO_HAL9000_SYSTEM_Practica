@@ -362,6 +362,24 @@ void downloadFile(char *file) {
     printToConsole(buffer);
     free(buffer);
 
+    char* source = calloc(100, sizeof(char));
+    strcat(source, "./smyslov/");
+    strcat(source, file);
+
+    pid_t pid = fork();
+    if(pid == 0){
+        char* argv[] = {"cp", source, "./floyd/", NULL};
+        if(execvp(argv[0], argv) < 0){
+            exit(1);
+        }
+        exit(0);
+    }
+    else{
+        wait(NULL);
+    }
+
+    free(source);
+
     char *extension = strrchr(file, '.');
     if (extension != NULL) {
         if (strcmp(extension, ".mp3") == 0) {
