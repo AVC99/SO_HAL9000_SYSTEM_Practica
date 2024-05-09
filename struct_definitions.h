@@ -55,6 +55,7 @@ typedef struct
 
 typedef struct {
     int socketFD;
+    //socket no fa falta
     char *filename;
     int ID;
     long long fileSize;

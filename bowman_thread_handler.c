@@ -98,7 +98,7 @@ void* downloadThreadHandler(void* arg) {
     memset(&message, 0, sizeof(queueMessage));
     //! This is blocking
     for (int i = 0; i < numberOfChunks; i++) {
-        if (msgrcv(downloadQueue, &message, sizeof(message), id, 0) < 0) {
+        if (msgrcv(downloadQueue, &message, sizeof(message)- sizeof(long), id, 0) < 0) {
             printError("ERROR: While reciving the message");
             return NULL;
         }
@@ -189,7 +189,7 @@ void* listenToPoole(void* arg) {
                     free(buffer);
 
                     long idLong = strtol(ID, NULL, 10);
-
+                    idLong = idLong + 1;
                     // send the data to the correct thread
                     queueMessage message;
                     memset(&message, 0, sizeof(queueMessage));
