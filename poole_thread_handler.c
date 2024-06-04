@@ -304,6 +304,7 @@ void sendFile(char *fileName, int bowmanSocket, int ID) {
             m.data = malloc(dataLength);
             memcpy(m.data, data, dataLength);
             sendSocketFile(bowmanSocket, m, dataLength);
+            //Sleep(1000);
             printToConsole("Sending START/MID message to Bowman\n");
             free(m.header);
             free(m.data);
@@ -393,6 +394,7 @@ int sendFileInfo(char *songName, int bowmanSocket) {
  */
 void downloadSong(char *songName, int bowmanSocket) {
     printToConsole("Downloading song\n");
+    //* Modificar el stats.txt incrementar/afegir numero de descargas de la cancion
     int ID = sendFileInfo(songName, bowmanSocket);
     sendFile(songName, bowmanSocket, ID);
 }
