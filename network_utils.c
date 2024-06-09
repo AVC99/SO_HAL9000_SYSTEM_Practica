@@ -60,7 +60,7 @@ void sendSocketFile(int socketFD, SocketMessage message, int dataLength) {
     int paddingCounter = 0;
     for (size_t j = 0; j < 256 - start_j; j++) {
         buffer[j + start_j] = '\0';
-        printToConsole("I ADDED PADDING\n");
+        //printToConsole("I ADDED PADDING\n");
         paddingCounter++;
     }
     printf("Padding added: %d\n", paddingCounter);

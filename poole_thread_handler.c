@@ -273,7 +273,7 @@ void sendFile(char *fileName, int bowmanSocket, int ID) {
     ssize_t bytesRead;
     // char *buffer;
     char c;
-    char *data = malloc(FILE_MAX_DATA_SIZE - 2);
+    char *data = malloc(FILE_MAX_DATA_SIZE );
     int dataLength = 0;
 
     for (int i = 0; i < idStringLength; i++) {
@@ -290,12 +290,12 @@ void sendFile(char *fileName, int bowmanSocket, int ID) {
             return;
         }
 
-        if ((size_t)dataLength < FILE_MAX_DATA_SIZE - 2) {
+        if ((size_t)dataLength < FILE_MAX_DATA_SIZE) {
             data[dataLength] = c;
             dataLength++;
         }
 
-        if (dataLength == FILE_MAX_DATA_SIZE - 2) {
+        if (dataLength == FILE_MAX_DATA_SIZE) {
             SocketMessage m;
             m.type = 0x04;
             m.headerLength = strlen("FILE_DATA");
@@ -304,6 +304,7 @@ void sendFile(char *fileName, int bowmanSocket, int ID) {
             m.data = malloc(dataLength);
             memcpy(m.data, data, dataLength);
             sendSocketFile(bowmanSocket, m, dataLength);
+            sleep(1);
             printToConsole("Sending START/MID message to Bowman\n");
             free(m.header);
             free(m.data);
@@ -394,6 +395,7 @@ int sendFileInfo(char *songName, int bowmanSocket) {
 void downloadSong(char *songName, int bowmanSocket) {
     printToConsole("Downloading song\n");
     int ID = sendFileInfo(songName, bowmanSocket);
+    sleep(1);
     sendFile(songName, bowmanSocket, ID);
 }
 

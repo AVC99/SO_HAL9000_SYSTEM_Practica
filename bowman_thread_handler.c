@@ -97,14 +97,30 @@ void* downloadThreadHandler(void* arg) {
     queueMessage message;
     memset(&message, 0, sizeof(queueMessage));
     //! This is blocking
+    char* b;
+    asprintf(&b, "Waiting for the chunks %d\n", numberOfChunks);
+    printToConsole(b);
+    free(b);
+    printToConsole("Waiting for the chunks\n");
+
     for (int i = 0; i < numberOfChunks; i++) {
-        if (msgrcv(downloadQueue, &message, sizeof(message)- sizeof(long), id, 0) < 0) {
+        printToConsole("Waiting for the message from the queue\n");
+        if (msgrcv(downloadQueue, &message, sizeof(message) - sizeof(long), id, 0) < 0) {
             printError("ERROR: While reciving the message");
             return NULL;
         }
+        printToConsole("Message received from the queue=====================================================\n");
         printToConsole(message.data);
+        int dataSize = strlen(message.data);
+        if (i == numberOfChunks - 1) {
+            // calculate the size of the last chunk
+            int remainingSize = sizeInt - i * maxDataSize;
+            dataSize = remainingSize < dataSize ? remainingSize : dataSize;
+        } 
         write(fd, message.data, strlen(message.data));
+        
     }
+    printToConsole("Download finished\n");
 
     char* downloadedMD5 = getMD5sum(filePath);
 
@@ -118,7 +134,6 @@ void* downloadThreadHandler(void* arg) {
     printToConsole(buffer);
     free(buffer);
 
-    close(fd);
     free(data);
     free(filePath);
     free(downloadedMD5);
@@ -133,12 +148,12 @@ void* listenToPoole(void* arg) {
     free(arg);
     // create the message queue for the download threads
 
-    downloadQueue = msgget(IPC_PRIVATE, 0666 | IPC_CREAT);
+    downloadQueue = msgget(IPC_PRIVATE, 0600 | IPC_CREAT);
     if (downloadQueue < 0) {
         printError("Error creating the message queue\n");
         return NULL;
     }
-    // printToConsole("DEBUG========================================\n");
+
     SocketMessage response;
     char buffer[1];
     pthread_mutex_lock(&isPooleConnectedMutex);
@@ -196,10 +211,12 @@ void* listenToPoole(void* arg) {
                     message.ID = idLong;
                     strcpy(message.data, data);
 
+                    printToConsole("Sending the message to the queue\n");
                     if (msgsnd(downloadQueue, &message, sizeof(queueMessage) - sizeof(long), 0) < 0) {
                         printError("Error while sendig the message");
                         return NULL;
                     }
+                    printToConsole("Message sent to the queue\n");
 
                 } else {
                     printError("Unknown header\n");
