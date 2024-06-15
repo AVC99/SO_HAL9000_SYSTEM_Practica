@@ -186,9 +186,9 @@ SocketMessage getSocketMessage(int clientFD) {
     if (numBytes < 1) {
         printError("Error reading the type\n");
     }
-    asprintf(&buffer, "Type: 0x%02x\n", type);
-    printToConsole(buffer);
-    free(buffer);
+    //asprintf(&buffer, "Type: 0x%02x\n", type);
+    //printToConsole(buffer);
+    //free(buffer);
     message.type = type;
 
     // get the header length
@@ -217,17 +217,23 @@ SocketMessage getSocketMessage(int clientFD) {
     free(header);
 
     // get the data
-    char *data = malloc(sizeof(char) * 256 - 3 - headerLength + 1);
+    char *data = malloc(sizeof(char) * 256 - 3 - headerLength);
     numBytes = read(clientFD, data, 256 - 3 - headerLength);
+
     if (numBytes < 256 - 3 - headerLength) {
         printError("Error reading the data\n");
         free(data);
-    }
-    asprintf(&buffer, "Data: %s\n", data);
-    printToConsole(buffer);
-    free(buffer);
+    }else{
+        message.data = malloc(sizeof(char) * numBytes );
+        memcpy(message.data, data, numBytes);
 
-    message.data = strdup(data);
+    }
+    /*asprintf(&buffer, "Data: %s\n", data);
+    printToConsole(buffer);
+    free(buffer);*/
+
+    //message.data = strdup(data);
+    
     free(data);
 
     return message;

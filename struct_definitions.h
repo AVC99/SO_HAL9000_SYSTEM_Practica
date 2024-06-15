@@ -8,7 +8,7 @@
 #define DOWNLOAD_SONG_PORT 8054
 #define BUFFER_SIZE 256
 #define MAX_BOWMANS 20
-#define FILE_MAX_DATA_SIZE (BUFFER_SIZE - 3 - strlen("FILE_DATA"))
+#define FILE_MAX_DATA_SIZE (BUFFER_SIZE - 3 - strlen("FILE_DATA")) // 256 - 3 - 9 = 244
 typedef struct
 {
     uint8_t type;
@@ -56,6 +56,7 @@ typedef struct
 typedef struct {
     int socketFD;
     //socket no fa falta
+    //TODO: REMOVE socketFD
     char *filename;
     int ID;
     long long fileSize;
@@ -64,6 +65,7 @@ typedef struct {
 
 typedef struct {
     long ID;
+    int rawDataSize;
     char data[BUFFER_SIZE - 3 - 9];
 } queueMessage;
 

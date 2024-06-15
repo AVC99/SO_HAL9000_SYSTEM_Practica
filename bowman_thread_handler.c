@@ -19,8 +19,9 @@
 extern Bowman bowman;
 extern int pooleSocketFD, isPooleConnected;
 extern pthread_mutex_t isPooleConnectedMutex;
+pthread_mutex_t consoleMutex;
 
-int downloadQueue;
+static int downloadQueue;
 
 /**
  * @brief Lists the songs in the Poole server no need to free the response
@@ -28,7 +29,6 @@ int downloadQueue;
  */
 void listSongs_BH(SocketMessage response) {
     // SHOW THE SONG IN THE CONSOLE
-
     for (size_t i = 0; i < strlen(response.data); i++) {
         if (response.data[i] == '&') {
             response.data[i] = '\n';
@@ -64,30 +64,56 @@ void listPlaylists_BH(SocketMessage response) {
 
     char* buffer;
     asprintf(&buffer, "Playlists in the Poole server:\n%s", start);
+    pthread_mutex_lock(&consoleMutex);
     printToConsole(buffer);
+    pthread_mutex_unlock(&consoleMutex);
     free(buffer);
 }
+/**
+ *
+ */
 void* downloadThreadHandler(void* arg) {
     char* data = (char*)arg;
     char* filename = strtok(data, "&");
     char* size = strtok(NULL, "&");
     char* md5sum = strtok(NULL, "&");
     char* ID = strtok(NULL, "&");
+
     // id now needs to be long
     long id = strtol(ID, NULL, 10);
 
     char* buffer;
+    pthread_mutex_lock(&consoleMutex);
     asprintf(&buffer, "\nDownloading file %s with size %s and md5sum %s ID %ld \n", filename, size, md5sum, id);
+    pthread_mutex_unlock(&consoleMutex);
     printToConsole(buffer);
     free(buffer);
 
+    int idLength = strlen(ID) + 1;  // +1 for the & symbol in the data that is part of the pure data
     int sizeInt = atoi(size);
 
-    int maxDataSize = BUFFER_SIZE - 3 - strlen("FILE_DATA");
+    int maxDataSize = BUFFER_SIZE - 3 - strlen("FILE_DATA") - idLength;
+    pthread_mutex_lock(&consoleMutex);
+    asprintf(&buffer, "Max data size %d\n", maxDataSize);
+    printToConsole(buffer);
+    free(buffer);
+    pthread_mutex_unlock(&consoleMutex);
     int numberOfChunks = sizeInt / maxDataSize;
+
     if (sizeInt % maxDataSize != 0) {
         numberOfChunks++;
     }
+
+    asprintf(&buffer, "Preparing to recive %d chunks\n", numberOfChunks);
+    printToConsole(buffer);
+    free(buffer);
+
+    int lastChunkSize = sizeInt % (maxDataSize);
+
+    asprintf(&buffer, "Last Chunk size %d\n", lastChunkSize);
+    printToConsole(buffer);
+    free(buffer);
+
     const char* folderPath = (bowman.folder[0] == '/') ? (bowman.folder + 1) : bowman.folder;
 
     char* filePath;
@@ -96,29 +122,49 @@ void* downloadThreadHandler(void* arg) {
     int fd = open(filePath, O_CREAT | O_WRONLY, 0666);
     queueMessage message;
     memset(&message, 0, sizeof(queueMessage));
+
+    //* NO NEEED FOR ALL OF THIS DATA IS ALREADY CLEAN NO DEED TO DO ALL TEHSE CHECKS
+    // ssize_t messageDataSize = sizeof(FILE_MAX_DATA_SIZE - strlen(ID) - 1);  // -1 for the & symbol in the data that is part of the pure data
     //! This is blocking
-    char* b;
-    asprintf(&b, "Waiting for the chunks %d\n", numberOfChunks);
-    printToConsole(b);
-    free(b);
-    printToConsole("Waiting for the chunks\n");
 
     for (int i = 0; i < numberOfChunks; i++) {
-        printToConsole("Waiting for the message from the queue\n");
-        if (msgrcv(downloadQueue, &message, sizeof(message) - sizeof(long), id, 0) < 0) {
+        if (msgrcv(downloadQueue, &message, sizeof(queueMessage) - sizeof(long), id, 0) < 0) {  // id 0 gets all the messages
             printError("ERROR: While reciving the message");
+            free(filePath);
+            close(fd);
             return NULL;
         }
-        printToConsole("Message received from the queue=====================================================\n");
-        printToConsole(message.data);
-        int dataSize = strlen(message.data);
-        if (i == numberOfChunks - 1) {
-            // calculate the size of the last chunk
-            int remainingSize = sizeInt - i * maxDataSize;
-            dataSize = remainingSize < dataSize ? remainingSize : dataSize;
-        } 
-        write(fd, message.data, strlen(message.data));
-        
+
+        if (i == numberOfChunks - 1 && lastChunkSize != 0) {
+            char* lastChunk = malloc(lastChunkSize * sizeof(char));
+            int j = 0;
+            for (j = 0; j < lastChunkSize; j++) {
+                lastChunk[j] = message.data[j];
+            }
+
+            write(fd, lastChunk, j);
+
+            pthread_mutex_lock(&consoleMutex);
+            asprintf(&buffer, "DATA: %s\n", message.data);
+            printToConsole(buffer);
+            pthread_mutex_unlock(&consoleMutex);
+            free(buffer);
+
+            pthread_mutex_lock(&consoleMutex);
+            asprintf(&buffer, "Writing last chunk sized (%d)\n", lastChunkSize);
+            printToConsole(buffer);
+            pthread_mutex_unlock(&consoleMutex);
+            free(buffer);
+            close(fd);
+            break;
+        } else {
+            write(fd, message.data, maxDataSize);
+            asprintf(&buffer, "Writing chunk (%d) rawDataSize:(%d) %s\n", i, maxDataSize, message.data);
+            pthread_mutex_lock(&consoleMutex);
+            printToConsole(buffer);
+            pthread_mutex_unlock(&consoleMutex);
+            free(buffer);
+        }
     }
     printToConsole("Download finished\n");
 
@@ -134,6 +180,14 @@ void* downloadThreadHandler(void* arg) {
     printToConsole(buffer);
     free(buffer);
 
+    // TODO: SEND THE MD5SUM TO THE POOLE SERVER 0x05 CHECK_OK or 0x05 CHECK_KO DATA:buit
+
+    if (strcmp(downloadedMD5, md5sum) == 0) {
+        printToConsole("MD5sums match\n");
+    } else {
+        printError("MD5sums do not match\n");
+    }
+
     free(data);
     free(filePath);
     free(downloadedMD5);
@@ -147,6 +201,7 @@ void* downloadThreadHandler(void* arg) {
 void* listenToPoole(void* arg) {
     free(arg);
     // create the message queue for the download threads
+    pthread_mutex_init(&consoleMutex, NULL);
 
     downloadQueue = msgget(IPC_PRIVATE, 0600 | IPC_CREAT);
     if (downloadQueue < 0) {
@@ -192,24 +247,61 @@ void* listenToPoole(void* arg) {
                 } else if (strcmp(response.header, "FILE_DATA") == 0) {
                     printToConsole("FILE DATA\n");
                     // get the id from data and send the data to the correct thread
-                    // char dataCopy[FILE_MAX_DATA_SIZE];
-                    char* ID = strtok(response.data, "&");
-                    char* data = strtok(NULL, "\0");
+                    // I get ID&data
+                    size_t i = 0;
+                    char idString[4] = {0};  // 4 bytes for the id possibly 3 numbers and \0
+                    char *b;
+                    
+
+                    // extractning the id from the response.data
+                    size_t idIndex = 0;
+                    while (response.data[i] != '&') {
+                        idString[idIndex++] = response.data[i++];
+                    }
+                    if (response.data[i] == '&') {  // skip the & symbol
+                        i++;
+                        asprintf(&b, "I : (%ld) data:(%c)\n", i, response.data[i]);
+                        printToConsole(b);
+                        free(b);
+                    } else {
+                        printError("Error parsing the ID\n");
+                    }
                     char* buffer;
-                    asprintf(&buffer, "ID: %s\n", ID);
+                    long idLong = strtol(idString, NULL, 10);
+                    size_t idLength = strlen(idString) + 1;           // +1 for the & symbol in the data that is part of the pure data
+                    size_t dataSize = FILE_MAX_DATA_SIZE - idLength;  
+                    pthread_mutex_lock(&consoleMutex);
+                    asprintf(&buffer, "idLength (%ld) dataSize (%ld)\n", idLength, dataSize);
                     printToConsole(buffer);
                     free(buffer);
-                    asprintf(&buffer, "Data: %s\n", data);
+                    pthread_mutex_unlock(&consoleMutex);
+
+
+                    char* data = malloc(dataSize * sizeof(char));
+                    size_t j = 0;
+
+                    while (j < dataSize) {
+                        data[j++] = response.data[i++];
+                    }
+
+                    pthread_mutex_lock(&consoleMutex);
+                    asprintf(&buffer, "LAST CHAR (%c) and j= (%ld)\n", data[j - 1], j);
+                    printToConsole(buffer);
+                    free(buffer);
+                    pthread_mutex_unlock(&consoleMutex);
+
+                    asprintf(&buffer, "ID: %ld\n", idLong);
                     printToConsole(buffer);
                     free(buffer);
 
-                    long idLong = strtol(ID, NULL, 10);
-                    idLong = idLong + 1;
                     // send the data to the correct thread
                     queueMessage message;
                     memset(&message, 0, sizeof(queueMessage));
                     message.ID = idLong;
-                    strcpy(message.data, data);
+                    message.rawDataSize = j;
+                    memcpy(message.data, data, j);
+
+                    // memcpy(message.data, data, strlen(data) + 1);
 
                     printToConsole("Sending the message to the queue\n");
                     if (msgsnd(downloadQueue, &message, sizeof(queueMessage) - sizeof(long), 0) < 0) {
@@ -217,7 +309,7 @@ void* listenToPoole(void* arg) {
                         return NULL;
                     }
                     printToConsole("Message sent to the queue\n");
-
+                    free(data);
                 } else {
                     printError("Unknown header\n");
                 }
@@ -247,5 +339,6 @@ void* listenToPoole(void* arg) {
     pthread_mutex_unlock(&isPooleConnectedMutex);
     // close the message queue
     msgctl(downloadQueue, IPC_RMID, NULL);
+    pthread_mutex_destroy(&consoleMutex);
     return NULL;
 }

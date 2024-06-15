@@ -270,19 +270,18 @@ void sendFile(char *fileName, int bowmanSocket, int ID) {
     char *idString;
     asprintf(&idString, "%d", ID);
     int idStringLength = strlen(idString);
-    ssize_t bytesRead;
+
     // char *buffer;
     char c;
-    char *data = malloc(FILE_MAX_DATA_SIZE );
+    char *data = malloc(FILE_MAX_DATA_SIZE * sizeof(char));
     int dataLength = 0;
 
     for (int i = 0; i < idStringLength; i++) {
-        data[dataLength] = idString[i];
-        dataLength++;
+        data[dataLength++] = idString[i];
     }
-    data[dataLength] = '&';
-    dataLength++;
+    data[dataLength++] = '&';
 
+    ssize_t bytesRead;
     while ((bytesRead = read(songfd, &c, 1)) > 0) {
         if (bytesRead < 0) {
             printError("Error reading from file\n");
@@ -363,7 +362,7 @@ int sendFileInfo(char *songName, int bowmanSocket) {
     printToConsole(buffer);
     free(buffer);
 
-    int randomId = getRand(0, 1000);
+    int randomId = getRand(1, 1000);  // random id between 1 and 1000 inclusive
 
     SocketMessage m;
     m.type = 0x04;
