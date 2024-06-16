@@ -63,10 +63,20 @@ typedef struct {
 
 } ThreadInfo;
 
+typedef struct{
+    int socketFD;
+    char* filename;
+}DownloadThreadInfo;
 typedef struct {
     long ID;
     int rawDataSize;
     char data[BUFFER_SIZE - 3 - 9];
 } queueMessage;
+
+typedef struct{
+    int downloadedChunks;
+    int totalChunks;
+    char* filename;
+} ChunkInfo;
 
 #endif  // STRUCT_DEFINITIONS_H

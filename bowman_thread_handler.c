@@ -19,9 +19,12 @@
 extern Bowman bowman;
 extern int pooleSocketFD, isPooleConnected;
 extern pthread_mutex_t isPooleConnectedMutex;
-pthread_mutex_t consoleMutex;
+pthread_mutex_t consoleMutex, chunkInfoMutex;
+
+ChunkInfo* chunkInfo;
 
 static int downloadQueue;
+int nOfDownloadingSongs;
 
 /**
  * @brief Lists the songs in the Poole server no need to free the response
@@ -103,6 +106,23 @@ void* downloadThreadHandler(void* arg) {
     if (sizeInt % maxDataSize != 0) {
         numberOfChunks++;
     }
+    int chunkInfoIndex = 0;
+    pthread_mutex_lock(&chunkInfoMutex);
+
+    if (nOfDownloadingSongs == 0) {
+        chunkInfo = malloc(sizeof(ChunkInfo));
+        chunkInfo->totalChunks = numberOfChunks;
+        chunkInfo->downloadedChunks = 0;
+        chunkInfo->filename = strdup(filename);
+    } else {
+        chunkInfo = realloc(chunkInfo, sizeof(ChunkInfo) * (nOfDownloadingSongs + 1));
+        chunkInfo[nOfDownloadingSongs].totalChunks = numberOfChunks;
+        chunkInfo[nOfDownloadingSongs].downloadedChunks = 0;
+        chunkInfoIndex = nOfDownloadingSongs;
+        chunkInfo[nOfDownloadingSongs].filename = strdup(filename);
+        nOfDownloadingSongs++;
+    }
+    pthread_mutex_unlock(&chunkInfoMutex);
 
     asprintf(&buffer, "Preparing to recive %d chunks\n", numberOfChunks);
     printToConsole(buffer);
@@ -123,10 +143,7 @@ void* downloadThreadHandler(void* arg) {
     queueMessage message;
     memset(&message, 0, sizeof(queueMessage));
 
-    //* NO NEEED FOR ALL OF THIS DATA IS ALREADY CLEAN NO DEED TO DO ALL TEHSE CHECKS
-    // ssize_t messageDataSize = sizeof(FILE_MAX_DATA_SIZE - strlen(ID) - 1);  // -1 for the & symbol in the data that is part of the pure data
     //! This is blocking
-
     for (int i = 0; i < numberOfChunks; i++) {
         if (msgrcv(downloadQueue, &message, sizeof(queueMessage) - sizeof(long), id, 0) < 0) {  // id 0 gets all the messages
             printError("ERROR: While reciving the message");
@@ -143,10 +160,23 @@ void* downloadThreadHandler(void* arg) {
             }
 
             write(fd, lastChunk, j);
+
+            pthread_mutex_lock(&chunkInfoMutex);
+            chunkInfo[chunkInfoIndex].downloadedChunks++;
+            printToConsole("Last chunk\n");
+            nOfDownloadingSongs--;
+
+            pthread_mutex_unlock(&chunkInfoMutex);
+
+            free(lastChunk);
             close(fd);
             break;
         } else {
             write(fd, message.data, maxDataSize);
+            pthread_mutex_lock(&chunkInfoMutex);
+            chunkInfo[chunkInfoIndex].downloadedChunks++;
+            //printToConsole("Chunk downloaded\n");
+            pthread_mutex_unlock(&chunkInfoMutex);
         }
     }
     printToConsole("Download finished\n");
@@ -163,7 +193,6 @@ void* downloadThreadHandler(void* arg) {
     printToConsole(buffer);
     free(buffer);
 
-
     if (strcmp(downloadedMD5, md5sum) == 0) {
         printToConsole("MD5sums match\n");
         SocketMessage m;
@@ -171,7 +200,7 @@ void* downloadThreadHandler(void* arg) {
         m.headerLength = strlen("CHECK_OK");
         m.header = strdup("CHECK_OK");
         m.data = strdup("");
-        
+
         sendSocketMessage(pooleSocketFD, m);
     } else {
         printError("MD5sums do not match\n");
@@ -198,6 +227,11 @@ void* listenToPoole(void* arg) {
     free(arg);
     // create the message queue for the download threads
     pthread_mutex_init(&consoleMutex, NULL);
+    pthread_mutex_init(&chunkInfoMutex, NULL);
+
+    pthread_mutex_lock(&chunkInfoMutex);
+    nOfDownloadingSongs = 0;
+    pthread_mutex_unlock(&chunkInfoMutex);
 
     downloadQueue = msgget(IPC_PRIVATE, 0600 | IPC_CREAT);
     if (downloadQueue < 0) {
@@ -216,7 +250,7 @@ void* listenToPoole(void* arg) {
             break;
         }
         response = getSocketMessage(pooleSocketFD);
-        printToConsole("Message received from Poole\n");
+        //printToConsole("Message received from Poole\n");
 
         switch (response.type) {
             case 0x02: {
@@ -241,7 +275,7 @@ void* listenToPoole(void* arg) {
                     pthread_detach(thread);
 
                 } else if (strcmp(response.header, "FILE_DATA") == 0) {
-                    printToConsole("FILE DATA\n");
+                    //printToConsole("FILE DATA\n");
                     // get the id from data and send the data to the correct thread
                     // I get ID&data
                     size_t i = 0;
@@ -278,12 +312,10 @@ void* listenToPoole(void* arg) {
 
                     // memcpy(message.data, data, strlen(data) + 1);
 
-                    printToConsole("Sending the message to the queue\n");
                     if (msgsnd(downloadQueue, &message, sizeof(queueMessage) - sizeof(long), 0) < 0) {
                         printError("Error while sendig the message");
                         return NULL;
                     }
-                    printToConsole("Message sent to the queue\n");
                     free(data);
                 } else {
                     printError("Unknown header\n");
@@ -310,11 +342,13 @@ void* listenToPoole(void* arg) {
         free(response.header);
         free(response.data);
         // TODO : FIX THIS IT ACTUALLY APEARS HERE AND IN MAIN BOWMAN MINOR BUG
-        printToConsole("Bowman> ");
+        //printToConsole("Bowman> ");
     }
     pthread_mutex_unlock(&isPooleConnectedMutex);
-    // close the message queue
+    // close the message queue and mutexes
     msgctl(downloadQueue, IPC_RMID, NULL);
     pthread_mutex_destroy(&consoleMutex);
+    pthread_mutex_destroy(&chunkInfoMutex);
+
     return NULL;
 }

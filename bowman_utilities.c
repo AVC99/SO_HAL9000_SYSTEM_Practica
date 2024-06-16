@@ -26,6 +26,10 @@ int discoverySocketFD, pooleSocketFD, isPooleConnected = FALSE;
 pthread_mutex_t isPooleConnectedMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_t listenThread;
 
+extern ChunkInfo *chunkInfo;
+extern pthread_mutex_t chunkInfoMutex;
+extern int nOfDownloadingSongs;
+
 /**
  * @brief Connects to the Poole server with stable connection
  * @param response message received from the Discovery server
@@ -233,7 +237,7 @@ void checkDownloadedPlaylists(const char *folderPath) {
                 free(numSongsStr);
                 for (int i = 0; i < numSongs; i++) {
                     char *songName = readUntil('\n', fd);
-                    asprintf(&buffer, "%s\n", songName);
+                    asprintf(&buffer, "\t- %s\n", songName);
                     printToConsole(buffer);
                     free(buffer);
                     free(songName);
@@ -244,6 +248,7 @@ void checkDownloadedPlaylists(const char *folderPath) {
             close(fd);
         }
     }
+    printToConsole("\n");
     closedir(dir);
 }
 
@@ -259,7 +264,7 @@ void checkDownloadedSongs(const char *folderPath) {
     }
 
     char *buffer;
-    asprintf(&buffer, "Songs in the %s folder :\n", folderPath);
+    asprintf(&buffer, "\nSongs in the %s folder :\n", folderPath);
     printToConsole(buffer);
     free(buffer);
 
@@ -267,7 +272,7 @@ void checkDownloadedSongs(const char *folderPath) {
     while ((entry = readdir(dir)) != NULL) {
         char *ext = strrchr(entry->d_name, '.');
         if (ext != NULL && strcmp(ext, ".mp3") == 0) {
-            asprintf(&buffer, "%s\n", entry->d_name);
+            asprintf(&buffer, "\t- %s\n", entry->d_name);
             printToConsole(buffer);
             free(buffer);
         }
@@ -281,6 +286,31 @@ void checkDownloadedSongs(const char *folderPath) {
 void checkDownloads() {
     printToConsole("CHECK DOWNLOADS\n");
     const char *folderPath = (bowman.folder[0] == '/') ? (bowman.folder + 1) : bowman.folder;
+    char *buffer;
+
+    pthread_mutex_lock(&chunkInfoMutex);
+    for (int i = 0; i <= nOfDownloadingSongs; i++) {
+        asprintf(&buffer, "Downloading song: %s\n", chunkInfo[i].filename);
+        printToConsole(buffer);
+        free(buffer);
+
+        float percentage = (float)chunkInfo[i].downloadedChunks / chunkInfo[i].totalChunks * 100;
+        int barLength = 20;
+        int progress = (int)(percentage / 100 * barLength);
+        char progressBar[barLength + 1];
+        for (int j = 0; j < barLength; j++) {
+            if(j < progress)
+                progressBar[j] = '=';
+            else
+                progressBar[j] = ' ';
+        }
+        progressBar[barLength] = '\0';
+        asprintf(&buffer, "Progress: [%s] %.2f%%\n", progressBar, percentage);
+        printToConsole(buffer);
+        free(buffer);
+    }
+    pthread_mutex_unlock(&chunkInfoMutex);
+
     checkDownloadedSongs(folderPath);
 
     checkDownloadedPlaylists(folderPath);

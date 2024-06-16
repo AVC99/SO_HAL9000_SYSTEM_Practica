@@ -176,7 +176,7 @@ int createAndListenSocket(char *IP, int port) {
 }
 
 SocketMessage getSocketMessage(int clientFD) {
-    char *buffer;
+    //char *buffer;
     SocketMessage message;
     ssize_t numBytes;
 
@@ -197,9 +197,9 @@ SocketMessage getSocketMessage(int clientFD) {
     if (numBytes < (ssize_t)sizeof(unsigned short)) {
         printError("Error reading the header length\n");
     }
-    asprintf(&buffer, "Header length: %u\n", headerLength);
-    printToConsole(buffer);
-    free(buffer);
+    //asprintf(&buffer, "Header length: %u\n", headerLength);
+    //printToConsole(buffer);
+    //free(buffer);
     message.headerLength = headerLength;
 
     // get the header

@@ -16,6 +16,7 @@
 extern pthread_mutex_t isPooleConnectedMutex;
 extern volatile int terminate;
 extern Poole poole;
+pthread_mutex_t socketMutex = PTHREAD_MUTEX_INITIALIZER;
 
 /**
  * @brief Lists the .mp3 songs in the Poole folder
@@ -391,12 +392,17 @@ int sendFileInfo(char *songName, int bowmanSocket) {
  * @param songName The name of the song
  * @param bowmanSocket The socket of the Bowman
  */
-void downloadSong(char *songName, int bowmanSocket) {
+void* downloadSong(void *arg) {
+    DownloadThreadInfo *args = (DownloadThreadInfo *)arg;
     printToConsole("Downloading song\n");
-    int ID = sendFileInfo(songName, bowmanSocket);
+    int ID = sendFileInfo(args->filename, args->socketFD);
     sleep(1);
-    sendFile(songName, bowmanSocket, ID);
+    sendFile(args->filename, args->socketFD, ID);
+    free(args->filename);
+    free(args);
+    return NULL;
 }
+
 
 int sendExitBowman(char *data) {
     printToConsole("Sending exit Bowman to Discovery\n");
@@ -452,7 +458,22 @@ int processBowmanMessage(SocketMessage message, int bowmanSocket) {
         }
         case 0x03: {
             if (strcmp(message.header, "DOWNLOAD_SONG") == 0) {
-                downloadSong(message.data, bowmanSocket);
+                pthread_t downloadSongThread;
+                DownloadThreadInfo *downloadThreadInfo = malloc(sizeof(DownloadThreadInfo));
+                if (downloadThreadInfo == NULL) {
+                    printError("Error allocating memory for downloadThreadInfo\n");
+                    return TRUE;
+                }
+                downloadThreadInfo->filename = strdup(message.data);
+                downloadThreadInfo->socketFD = bowmanSocket;
+
+                if (pthread_create(&downloadSongThread, NULL, downloadSong, (void *)downloadThreadInfo) != 0) {
+                    printError("Error creating downloadSongThread\n");
+                    return TRUE;
+                }else {
+                    pthread_detach(downloadSongThread);
+                }
+                //downloadSong(message.data, bowmanSocket);
                 printToConsole("DOWNLOAD SONG\n");
 
             } else if (strcmp(message.header, "DOWNLOAD_LIST") == 0) {
@@ -568,7 +589,7 @@ void *bowmanThreadHandler(void *arg) {
         free(message.header);
         free(message.data);
     }
-
+    pthread_mutex_destroy(&socketMutex);
     close(bowmanSocket);
     return NULL;
 }
