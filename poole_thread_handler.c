@@ -398,6 +398,37 @@ void downloadSong(char *songName, int bowmanSocket) {
     sendFile(songName, bowmanSocket, ID);
 }
 
+int sendExitBowman(char *data) {
+    printToConsole("Sending exit Bowman to Discovery\n");
+    int discoverySFD;
+    if ((discoverySFD = createAndConnectSocket(poole.discoveryIP, poole.discoveryPort)) < 0) {
+        printError("Error connecting to Discovery\n");
+        return -1;
+    }
+    printToConsole("Connected to Discovery FOR BOWMAN EXIT\n");
+    SocketMessage m;
+    m.type = 0x06;
+    m.headerLength = strlen("EXIT_BOWMAN");
+    m.header = strdup("EXIT_BOWMAN");
+    m.data = strdup(data);
+
+    sendSocketMessage(discoverySFD, m);
+
+    free(m.header);
+    free(m.data);
+    printToConsole("Sent message to Discovery\n");
+
+    SocketMessage response = getSocketMessage(discoverySFD);
+    if (strcmp(response.header, "CON_OK") == 0) {
+        printToConsole("Received CON_OK from Discovery\n");
+        close(discoverySFD);
+        return TRUE;
+    } else {
+        printError("Error receiving CON_OK from Discovery\n");
+        return FALSE;
+    }
+}
+
 /**
  * @brief Processes the message received from the Bowman and returns if the thread should terminate
  * @param message The message received from the Bowman
@@ -434,16 +465,39 @@ int processBowmanMessage(SocketMessage message, int bowmanSocket) {
             }
             break;
         }
+        case 0x05: {
+            if (strcmp(message.header, "CHECK_OK") == 0) {
+                printToConsole("MD5 OK\n");
+
+            } else if (strcmp(message.header, "CHECK_KO") == 0) {
+                printToConsole("MD5 KO\n");
+            } else {
+                printError("Error processing message from Bowman type 0x05\n");
+                sendError(bowmanSocket);
+            }
+
+            break;
+        }
         case 0x06: {
             if (strcmp(message.header, "EXIT") == 0) {
                 printToConsole("Bowman disconnected\n");
-                SocketMessage response;
-                response.type = 0x06;
-                response.headerLength = strlen("CON_OK");
-                response.header = strdup("CON_OK");
-                response.data = strdup("");
 
-                sendSocketMessage(bowmanSocket, response);
+                SocketMessage response;
+                if (sendExitBowman(message.data) == TRUE) {
+                    response.type = 0x06;
+                    response.headerLength = strlen("CON_OK");
+                    response.header = strdup("CON_OK");
+                    response.data = strdup("");
+
+                    sendSocketMessage(bowmanSocket, response);
+                }else {
+                    response.type = 0x06;
+                    response.headerLength = strlen("CON_KO");
+                    response.header = strdup("CON_KO");
+                    response.data = strdup("");
+
+                    sendSocketMessage(bowmanSocket, response);
+                }
 
                 // I DO THE THING WERE BOWMAN DISCONNECTS FROM POOLE AND DISCOVERY
                 // SO AS LONG AS I END THE THREAD IM OK

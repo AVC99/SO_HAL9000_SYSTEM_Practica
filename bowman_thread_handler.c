@@ -143,27 +143,10 @@ void* downloadThreadHandler(void* arg) {
             }
 
             write(fd, lastChunk, j);
-
-            pthread_mutex_lock(&consoleMutex);
-            asprintf(&buffer, "DATA: %s\n", message.data);
-            printToConsole(buffer);
-            pthread_mutex_unlock(&consoleMutex);
-            free(buffer);
-
-            pthread_mutex_lock(&consoleMutex);
-            asprintf(&buffer, "Writing last chunk sized (%d)\n", lastChunkSize);
-            printToConsole(buffer);
-            pthread_mutex_unlock(&consoleMutex);
-            free(buffer);
             close(fd);
             break;
         } else {
             write(fd, message.data, maxDataSize);
-            asprintf(&buffer, "Writing chunk (%d) rawDataSize:(%d) %s\n", i, maxDataSize, message.data);
-            pthread_mutex_lock(&consoleMutex);
-            printToConsole(buffer);
-            pthread_mutex_unlock(&consoleMutex);
-            free(buffer);
         }
     }
     printToConsole("Download finished\n");
@@ -180,12 +163,25 @@ void* downloadThreadHandler(void* arg) {
     printToConsole(buffer);
     free(buffer);
 
-    // TODO: SEND THE MD5SUM TO THE POOLE SERVER 0x05 CHECK_OK or 0x05 CHECK_KO DATA:buit
 
     if (strcmp(downloadedMD5, md5sum) == 0) {
         printToConsole("MD5sums match\n");
+        SocketMessage m;
+        m.type = 0x05;
+        m.headerLength = strlen("CHECK_OK");
+        m.header = strdup("CHECK_OK");
+        m.data = strdup("");
+        
+        sendSocketMessage(pooleSocketFD, m);
     } else {
         printError("MD5sums do not match\n");
+        SocketMessage m;
+        m.type = 0x05;
+        m.headerLength = strlen("CHECK_KO");
+        m.header = strdup("CHECK_KO");
+        m.data = strdup("");
+
+        sendSocketMessage(pooleSocketFD, m);
     }
 
     free(data);
@@ -250,8 +246,6 @@ void* listenToPoole(void* arg) {
                     // I get ID&data
                     size_t i = 0;
                     char idString[4] = {0};  // 4 bytes for the id possibly 3 numbers and \0
-                    char *b;
-                    
 
                     // extractning the id from the response.data
                     size_t idIndex = 0;
@@ -260,22 +254,13 @@ void* listenToPoole(void* arg) {
                     }
                     if (response.data[i] == '&') {  // skip the & symbol
                         i++;
-                        asprintf(&b, "I : (%ld) data:(%c)\n", i, response.data[i]);
-                        printToConsole(b);
-                        free(b);
                     } else {
                         printError("Error parsing the ID\n");
                     }
-                    char* buffer;
-                    long idLong = strtol(idString, NULL, 10);
-                    size_t idLength = strlen(idString) + 1;           // +1 for the & symbol in the data that is part of the pure data
-                    size_t dataSize = FILE_MAX_DATA_SIZE - idLength;  
-                    pthread_mutex_lock(&consoleMutex);
-                    asprintf(&buffer, "idLength (%ld) dataSize (%ld)\n", idLength, dataSize);
-                    printToConsole(buffer);
-                    free(buffer);
-                    pthread_mutex_unlock(&consoleMutex);
 
+                    long idLong = strtol(idString, NULL, 10);
+                    size_t idLength = strlen(idString) + 1;  // +1 for the & symbol in the data that is part of the pure data
+                    size_t dataSize = FILE_MAX_DATA_SIZE - idLength;
 
                     char* data = malloc(dataSize * sizeof(char));
                     size_t j = 0;
@@ -283,16 +268,6 @@ void* listenToPoole(void* arg) {
                     while (j < dataSize) {
                         data[j++] = response.data[i++];
                     }
-
-                    pthread_mutex_lock(&consoleMutex);
-                    asprintf(&buffer, "LAST CHAR (%c) and j= (%ld)\n", data[j - 1], j);
-                    printToConsole(buffer);
-                    free(buffer);
-                    pthread_mutex_unlock(&consoleMutex);
-
-                    asprintf(&buffer, "ID: %ld\n", idLong);
-                    printToConsole(buffer);
-                    free(buffer);
 
                     // send the data to the correct thread
                     queueMessage message;
@@ -320,6 +295,7 @@ void* listenToPoole(void* arg) {
                     printToConsole("Poole disconnected\n");
                     pthread_mutex_lock(&isPooleConnectedMutex);
                     isPooleConnected = FALSE;
+                    printToConsole("IS Pooole Connected set to FALSE\n");
                     pthread_mutex_unlock(&isPooleConnectedMutex);
                 } else {
                     printError("Unknown header\n");

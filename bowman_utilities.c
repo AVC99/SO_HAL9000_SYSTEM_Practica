@@ -84,7 +84,7 @@ void connectToPoole(SocketMessage response) {
         pthread_mutex_lock(&isPooleConnectedMutex);
         isPooleConnected = TRUE;
         pthread_mutex_unlock(&isPooleConnectedMutex);
-        
+
         // Start listening to Poole no need to pass the socket file descriptor to the thread
         // because it is a extern global variable
         if (pthread_create(&listenThread, NULL, listenToPoole, NULL) != 0) {
@@ -126,16 +126,16 @@ int connectToDiscovery(int isExit) {
         m.headerLength = strlen("NEW_BOWMAN");
         m.header = strdup("NEW_BOWMAN");
         m.data = strdup(bowman.username);
+        sendSocketMessage(discoverySocketFD, m);
+        free(m.header);
+        free(m.data);
     } else if (isExit == TRUE) {
         m.type = 0x06;
         m.headerLength = strlen("EXIT");
         m.header = strdup("EXIT");
         m.data = strdup(bowman.username);
+        sendSocketMessage(discoverySocketFD, m);
     }
-
-    sendSocketMessage(discoverySocketFD, m);
-    free(m.header);
-    free(m.data);
 
     printToConsole("Sent message to Discovery\n");
     // Receive response
@@ -156,8 +156,8 @@ int connectToDiscovery(int isExit) {
             printError("Error disconnecting from Discovery\n");
             exit(1);
         }
-        free(response.header);
-        free(response.data);
+        // free(response.header);
+        // free(response.data);
         close(discoverySocketFD);
 
         return TRUE;
@@ -409,7 +409,6 @@ void logout() {
 
     pthread_mutex_lock(&isPooleConnectedMutex);
     if (isPooleConnected == TRUE) {
-        pthread_mutex_unlock(&isPooleConnectedMutex);
         SocketMessage m;
         m.type = 0x06;
         m.headerLength = strlen("EXIT");
@@ -421,11 +420,10 @@ void logout() {
         free(m.header);
         free(m.data);
 
+        printToConsole("Sent LOGOUT message to Poole\n");
         pthread_join(listenThread, NULL);
+        printToConsole("Thread joined\n");
         close(pooleSocketFD);
-        if (connectToDiscovery(TRUE) == TRUE) {
-            printToConsole("Bowman disconnected from Discovery correctly\n");
-        }
     }
     pthread_mutex_unlock(&isPooleConnectedMutex);
 }

@@ -61,10 +61,9 @@ void closeProgram() {
     terminate = TRUE;
     pthread_mutex_unlock(&terminateMutex);
 
-
-    pthread_cancel(bowmanThread);    
+    pthread_cancel(bowmanThread);
     pthread_detach(bowmanThread);
-    
+
     pthread_cancel(pooleThread);
     pthread_detach(pooleThread);
 
@@ -194,7 +193,6 @@ void *listenToBowman() {
             }
         } else if (strcmp(m.header, "EXIT") == 0) {
             pthread_mutex_lock(&poolesMutex);
-
             printToConsole("Bowman disconnected\n");
             SocketMessage response;
             response.type = 0x06;
@@ -296,7 +294,7 @@ void *listenToPoole() {
 
             pthread_mutex_unlock(&poolesMutex);
             pthread_mutex_unlock(&numPoolesMutex);
-        }else if (strcmp(m.header, "EXIT_POOLE") == 0){
+        } else if (strcmp(m.header, "EXIT_POOLE") == 0) {
             printToConsole("Poole disconnected\n");
 
             SocketMessage response;
@@ -325,7 +323,37 @@ void *listenToPoole() {
                 }
             }
             pthread_mutex_unlock(&numPoolesMutex);
+
+        } else if (strcmp(m.header, "EXIT_BOWMAN") == 0) {
             
+            printToConsole("Bowman disconnected\n");
+            SocketMessage response;
+            response.type = 0x06;
+            response.headerLength = strlen("CON_OK");
+            response.header = strdup("CON_OK");
+            response.data = strdup("");
+
+            sendSocketMessage(pooleSocketFD, response);
+
+            free(response.header);
+            free(response.data);
+
+            pthread_mutex_lock(&numPoolesMutex);
+            pthread_mutex_lock(&poolesMutex);
+
+            for (int i = 0; i < numPooles; i++) {
+                for (int j = 0; j < pooles[i].numOfBowmans; j++) {
+                    if (strcmp(pooles[i].bowmans[j], m.data) == 0) {
+                        free(pooles[i].bowmans[j]);
+                        pooles[i].bowmans[j] = pooles[i].bowmans[pooles[i].numOfBowmans - 1];
+                        pooles[i].numOfBowmans--;
+                        printToConsole("Bowman removed from Poole\n");
+                        break;
+                    }
+                }
+            }
+            pthread_mutex_unlock(&numPoolesMutex);
+            pthread_mutex_unlock(&poolesMutex);
         }
 
         close(pooleSocketFD);
@@ -358,7 +386,7 @@ int main(int argc, char *argv[]) {
         printError("Error creating Poole thread\n");
         exit(1);
     }
-    
+
     pthread_join(bowmanThread, NULL);
     pthread_join(pooleThread, NULL);
 

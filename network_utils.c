@@ -210,9 +210,9 @@ SocketMessage getSocketMessage(int clientFD) {
         free(header);
     }
     header[headerLength] = '\0';
-    asprintf(&buffer, "Header: %s\n", header);
-    printToConsole(buffer);
-    free(buffer);
+    //asprintf(&buffer, "Header: %s\n", header);
+    //printToConsole(buffer);
+    //free(buffer);
     message.header = strdup(header);
     free(header);
 
@@ -226,7 +226,6 @@ SocketMessage getSocketMessage(int clientFD) {
     }else{
         message.data = malloc(sizeof(char) * numBytes );
         memcpy(message.data, data, numBytes);
-
     }
     /*asprintf(&buffer, "Data: %s\n", data);
     printToConsole(buffer);
@@ -247,6 +246,6 @@ void sendError(int clientFD) {
     message.type = 0x07;
     message.headerLength = strlen("UNKNOWN");
     message.header = "UNKNOWN";
-    message.data = "";
+    message.data = strdup("");
     sendSocketMessage(clientFD, message);
 }

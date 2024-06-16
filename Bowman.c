@@ -6,15 +6,15 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "io_utils.h"
-#include "struct_definitions.h"
-#include "network_utils.h"
 #include "bowman_utilities.h"
+#include "io_utils.h"
+#include "network_utils.h"
+#include "struct_definitions.h"
 
 int inputFileFd;
 Bowman bowman;
 extern int discoverySocketFD, pooleSocketFD, isPooleConnected;
-char *command;
+char* command;
 void freeMemory() {
     // freeUtilitiesBowman();
     free(bowman.username);
@@ -30,13 +30,15 @@ void closeFds() {
     if (discoverySocketFD != 0) {
         close(discoverySocketFD);
     }
-    if(pooleSocketFD != 0){
+    if (pooleSocketFD != 0) {
         close(pooleSocketFD);
     }
 }
 
-void closeProgram() {
-    logout();
+void closeProgram(int isSignal) {
+    if (isSignal == TRUE) {
+        logout();
+    }
     freeMemory();
     closeFds();
     exit(0);
@@ -74,9 +76,9 @@ void saveBowman(char* filename) {
     free(port);
 }
 
-void phaseOneTesting(){
+void phaseOneTesting() {
     printToConsole("File read correctly\n");
-    char *buffer;
+    char* buffer;
     asprintf(&buffer, "Bowman username: %s\n", bowman.username);
     printToConsole(buffer);
     free(buffer);
@@ -89,16 +91,14 @@ void phaseOneTesting(){
     asprintf(&buffer, "Bowman port: %d\n", bowman.port);
     printToConsole(buffer);
     free(buffer);
-    
 }
-
 
 /**
  * Reads the commands from the user and executes them until LOGOUT is called
  */
 void commandInterpreter() {
     int bytesRead;
-    
+
     int continueReading = TRUE;
     do {
         printToConsole("Bowman $ ");
@@ -125,11 +125,11 @@ void commandInterpreter() {
             continueReading = FALSE;
         } else  // IF THE COMMAND HAS MORE THAN ONE WORD
         {
-            char *token = strtok(command, " ");
+            char* token = strtok(command, " ");
 
             if (token != NULL) {
                 if (strcasecmp(token, "DOWNLOAD") == 0) {
-                    char *filename = strtok(NULL, " ");
+                    char* filename = strtok(NULL, " ");
                     if (filename != NULL && strtok(NULL, " ") == NULL) {
                         downloadFile(filename);
                         free(command);
@@ -180,7 +180,6 @@ void commandInterpreter() {
     // free(command); I FREE AT CLOSE PROGRAM
 }
 
-
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         printError("Error: Not enough arguments provided\n");
@@ -194,6 +193,6 @@ int main(int argc, char* argv[]) {
 
     commandInterpreter();
 
-    closeProgram();
+    closeProgram(FALSE);
     return 0;
 }
