@@ -106,6 +106,7 @@ void* downloadThreadHandler(void* arg) {
     if (sizeInt % maxDataSize != 0) {
         numberOfChunks++;
     }
+
     int chunkInfoIndex = 0;
     pthread_mutex_lock(&chunkInfoMutex);
 
@@ -114,13 +115,25 @@ void* downloadThreadHandler(void* arg) {
         chunkInfo->totalChunks = numberOfChunks;
         chunkInfo->downloadedChunks = 0;
         chunkInfo->filename = strdup(filename);
+        pthread_mutex_lock(&consoleMutex);
+        printToConsole("First SONG\n");
+        pthread_mutex_unlock(&consoleMutex);
+        nOfDownloadingSongs = 1;
     } else {
+        
         chunkInfo = realloc(chunkInfo, sizeof(ChunkInfo) * (nOfDownloadingSongs + 1));
         chunkInfo[nOfDownloadingSongs].totalChunks = numberOfChunks;
         chunkInfo[nOfDownloadingSongs].downloadedChunks = 0;
         chunkInfoIndex = nOfDownloadingSongs;
         chunkInfo[nOfDownloadingSongs].filename = strdup(filename);
+        chunkInfoIndex = nOfDownloadingSongs;
         nOfDownloadingSongs++;
+        char* buffer;
+        asprintf(&buffer, "Number of downloading songs %d\n", nOfDownloadingSongs);
+        pthread_mutex_lock(&consoleMutex);
+        printToConsole(buffer);
+        pthread_mutex_unlock(&consoleMutex);
+        free(buffer);
     }
     pthread_mutex_unlock(&chunkInfoMutex);
 
@@ -164,6 +177,8 @@ void* downloadThreadHandler(void* arg) {
             pthread_mutex_lock(&chunkInfoMutex);
             chunkInfo[chunkInfoIndex].downloadedChunks++;
             printToConsole("Last chunk\n");
+            free(chunkInfo[chunkInfoIndex].filename);
+            
             nOfDownloadingSongs--;
 
             pthread_mutex_unlock(&chunkInfoMutex);
@@ -175,7 +190,7 @@ void* downloadThreadHandler(void* arg) {
             write(fd, message.data, maxDataSize);
             pthread_mutex_lock(&chunkInfoMutex);
             chunkInfo[chunkInfoIndex].downloadedChunks++;
-            //printToConsole("Chunk downloaded\n");
+            // printToConsole("Chunk downloaded\n");
             pthread_mutex_unlock(&chunkInfoMutex);
         }
     }
@@ -202,6 +217,8 @@ void* downloadThreadHandler(void* arg) {
         m.data = strdup("");
 
         sendSocketMessage(pooleSocketFD, m);
+        free(m.header);
+        free(m.data);
     } else {
         printError("MD5sums do not match\n");
         SocketMessage m;
@@ -211,6 +228,8 @@ void* downloadThreadHandler(void* arg) {
         m.data = strdup("");
 
         sendSocketMessage(pooleSocketFD, m);
+        free(m.header);
+        free(m.data);
     }
 
     free(data);
@@ -250,7 +269,7 @@ void* listenToPoole(void* arg) {
             break;
         }
         response = getSocketMessage(pooleSocketFD);
-        //printToConsole("Message received from Poole\n");
+        // printToConsole("Message received from Poole\n");
 
         switch (response.type) {
             case 0x02: {
@@ -275,9 +294,9 @@ void* listenToPoole(void* arg) {
                     pthread_detach(thread);
 
                 } else if (strcmp(response.header, "FILE_DATA") == 0) {
-                    //printToConsole("FILE DATA\n");
-                    // get the id from data and send the data to the correct thread
-                    // I get ID&data
+                    // printToConsole("FILE DATA\n");
+                    //  get the id from data and send the data to the correct thread
+                    //  I get ID&data
                     size_t i = 0;
                     char idString[4] = {0};  // 4 bytes for the id possibly 3 numbers and \0
 
@@ -342,7 +361,7 @@ void* listenToPoole(void* arg) {
         free(response.header);
         free(response.data);
         // TODO : FIX THIS IT ACTUALLY APEARS HERE AND IN MAIN BOWMAN MINOR BUG
-        //printToConsole("Bowman> ");
+        // printToConsole("Bowman> ");
     }
     pthread_mutex_unlock(&isPooleConnectedMutex);
     // close the message queue and mutexes

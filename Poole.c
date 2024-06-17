@@ -133,10 +133,11 @@ void connectToDiscovery(int isExit) {
         sendSocketMessage(discoverySocketFD, m);
 
         free(m.header);
+        free(m.data);
     }
 
     printToConsole("Sent message to Discovery\n");
-    // ! FIXME : WHEN CTRL+C IS PRESSED THIS HAS MEMORY LEAKS
+    // ! FIXME : WHEN CTRL+C IS PRESSED THIS HAS MEMORY LEAKS but i free the memory in 167
     // Receive response
     SocketMessage response = getSocketMessage(discoverySocketFD);
 
@@ -145,25 +146,33 @@ void connectToDiscovery(int isExit) {
         case 0x01:
             if (strcmp(response.header, "CON_OK") == 0) {
                 printToConsole("Connection to Discovery successful\n");
+                free(response.header);
+                free(response.data);
+
+                //* LISTEN FOR BOWMAN NEVER ENDS SO THE MEMORY IS NEVER FREED
                 listenForBowmans();
             } else if (strcmp(response.header, "CON_KO") == 0) {
                 printError("Connection to Discovery failed\n");
+                free(response.header);
+                free(response.data);
             }
             break;
         case 0x06:
             if (strcmp(response.header, "EXIT_OK") == 0) {
                 printToConsole("Exit from Discovery successful\n");
+
             } else {
                 printError("Exit from Discovery failed\n");
             }
+            free(response.header);
+            free(response.data);
             break;
         default:
             printError("Error: Wrong message type\n");
+            free(response.header);
+            free(response.data);
             break;
     }
-
-    free(response.header);
-    free(response.data);
 
     close(discoverySocketFD);
 }

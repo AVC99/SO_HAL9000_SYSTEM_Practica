@@ -15,12 +15,16 @@ int inputFileFd;
 Bowman bowman;
 extern int discoverySocketFD, pooleSocketFD, isPooleConnected;
 char* command;
+extern ChunkInfo* chunkInfo;
+
 void freeMemory() {
-    // freeUtilitiesBowman();
     free(bowman.username);
     free(bowman.folder);
     free(bowman.ip);
-    free(command);
+    free(chunkInfo);
+    if (command != NULL) {
+        free(command);
+    }
 }
 
 void closeFds() {
@@ -34,11 +38,14 @@ void closeFds() {
         close(pooleSocketFD);
     }
 }
+void closeProgramSignal() {
+    logout();
+    freeMemory();
+    closeFds();
+    exit(0);
+}
 
-void closeProgram(int isSignal) {
-    if (isSignal == TRUE) {
-        logout();
-    }
+void closeProgram() {
     freeMemory();
     closeFds();
     exit(0);
@@ -120,6 +127,7 @@ void commandInterpreter() {
         if (strcasecmp(command, "CONNECT") == 0) {
             connectToDiscovery(FALSE);
             free(command);
+            command = NULL;
         } else if (strcasecmp(command, "LOGOUT") == 0) {
             logout();
             continueReading = FALSE;
@@ -133,47 +141,58 @@ void commandInterpreter() {
                     if (filename != NULL && strtok(NULL, " ") == NULL) {
                         downloadFile(filename);
                         free(command);
+                        command = NULL;
                     } else {
                         printError("Error: Missing arguments\n");
                         free(command);
+                        command = NULL;
                     }
                 } else if (strcasecmp(token, "LIST") == 0) {
                     token = strtok(NULL, " ");
                     if (token != NULL && strcasecmp(token, "SONGS") == 0) {
                         listSongs();
                         free(command);
+                        command = NULL;
                     } else if (token != NULL && strcasecmp(token, "PLAYLISTS") == 0) {
                         listPlaylists();
                         free(command);
+                        command = NULL;
                     } else {
                         printError("Error: Missing arguments\n");
                         free(command);
+                        command = NULL;
                     }
                 } else if (strcasecmp(token, "CHECK") == 0) {
                     token = strtok(NULL, " ");
                     if (token != NULL && strcasecmp(token, "DOWNLOADS") == 0) {
                         checkDownloads();
                         free(command);
+                        command = NULL;
                     } else {
                         printError("Error: Missing arguments\n");
                         free(command);
+                        command = NULL;
                     }
                 } else if (strcasecmp(token, "CLEAR") == 0) {
                     token = strtok(NULL, " ");
                     if (token != NULL && strcasecmp(token, "DOWNLOADS") == 0) {
                         clearDownloads();
                         free(command);
+                        command = NULL;
                     } else {
                         printError("Error: Missing arguments\n");
                         free(command);
+                        command = NULL;
                     }
                 } else {
                     printError("ERROR: Please input a valid command.\n");
                     free(command);
+                    command = NULL;
                 }
             } else {
                 printError("ERROR: Please input a valid command.\n");
                 free(command);
+                command = NULL;
             }
         }
     } while (continueReading == TRUE);
@@ -186,13 +205,13 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    signal(SIGINT, closeProgram);
+    signal(SIGINT, closeProgramSignal);
 
     saveBowman(argv[1]);
     phaseOneTesting();
 
     commandInterpreter();
 
-    closeProgram(FALSE);
+    closeProgram();
     return 0;
 }

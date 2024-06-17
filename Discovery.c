@@ -12,12 +12,12 @@
 #include "network_utils.h"
 #include "struct_definitions.h"
 
-volatile int terminate = FALSE;
+int terminate = FALSE;
 int inputFileFd, listenBowmanFD, listenPooleFD, numPooles = 0;
 Discovery discovery;
 pthread_t bowmanThread, pooleThread;
-pthread_mutex_t terminateMutex = PTHREAD_MUTEX_INITIALIZER, numPoolesMutex = PTHREAD_MUTEX_INITIALIZER,
-                poolesMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t terminateMutex, numPoolesMutex = PTHREAD_MUTEX_INITIALIZER,
+                                poolesMutex = PTHREAD_MUTEX_INITIALIZER;
 PooleServer *pooles;
 
 /**
@@ -55,17 +55,22 @@ void closeFds() {
  * @brief Closes the program correctly cleaning the memory and closing the file descriptors
  */
 void closeProgram() {
-    printToConsole("Closing program\n");
+    printToConsole("\nClosing program\n");
 
     pthread_mutex_lock(&terminateMutex);
     terminate = TRUE;
+    printToConsole("Terminate set to TRUE\n");
     pthread_mutex_unlock(&terminateMutex);
 
     pthread_cancel(bowmanThread);
-    pthread_detach(bowmanThread);
-
     pthread_cancel(pooleThread);
-    pthread_detach(pooleThread);
+
+
+
+    pthread_join(bowmanThread, NULL);
+    printToConsole("Bowman thread closed\n");
+    pthread_join(pooleThread, NULL);
+    printToConsole("Poole thread closed\n");
 
     freeMemory();
     closeFds();
@@ -226,7 +231,6 @@ void *listenToBowman() {
 
         close(bowmanSocketFD);
     }
-    pthread_mutex_unlock(&terminateMutex);
 
     return NULL;
 }
@@ -243,6 +247,7 @@ void *listenToPoole() {
     pthread_mutex_lock(&terminateMutex);
     while (terminate == FALSE) {
         pthread_mutex_unlock(&terminateMutex);
+
         printToConsole("Waiting for Poole...\n");
 
         int pooleSocketFD = accept(listenPooleFD, (struct sockaddr *)NULL, NULL);
@@ -323,9 +328,10 @@ void *listenToPoole() {
                 }
             }
             pthread_mutex_unlock(&numPoolesMutex);
+            free(m.header);
+            free(m.data);
 
         } else if (strcmp(m.header, "EXIT_BOWMAN") == 0) {
-            
             printToConsole("Bowman disconnected\n");
             SocketMessage response;
             response.type = 0x06;
@@ -354,11 +360,12 @@ void *listenToPoole() {
             }
             pthread_mutex_unlock(&numPoolesMutex);
             pthread_mutex_unlock(&poolesMutex);
+            free(m.header);
+            free(m.data);
         }
 
         close(pooleSocketFD);
     }
-    pthread_mutex_unlock(&terminateMutex);
 
     return NULL;
 }
@@ -373,6 +380,9 @@ int main(int argc, char *argv[]) {
         printError("Error: Wrong number of arguments\n");
         exit(1);
     }
+
+    pthread_mutex_init(&terminateMutex, NULL);
+    terminate = FALSE;
 
     saveDiscovery(argv[1]);
     phaseOneTesting();

@@ -331,6 +331,7 @@ void sendFile(char *fileName, int bowmanSocket, int ID) {
         free(m.data);
     }
     free(data);
+    free(idString);
     close(songfd);
 }
 
@@ -378,6 +379,8 @@ int sendFileInfo(char *songName, int bowmanSocket) {
 
     free(m.header);
     free(m.data);
+    free(md5Hash);
+    free(data);
 
     if (chdir("..") < 0) {
         printError("Error changing back directory\n");
@@ -392,7 +395,7 @@ int sendFileInfo(char *songName, int bowmanSocket) {
  * @param songName The name of the song
  * @param bowmanSocket The socket of the Bowman
  */
-void* downloadSong(void *arg) {
+void *downloadSong(void *arg) {
     DownloadThreadInfo *args = (DownloadThreadInfo *)arg;
     printToConsole("Downloading song\n");
     int ID = sendFileInfo(args->filename, args->socketFD);
@@ -402,7 +405,6 @@ void* downloadSong(void *arg) {
     free(args);
     return NULL;
 }
-
 
 int sendExitBowman(char *data) {
     printToConsole("Sending exit Bowman to Discovery\n");
@@ -428,11 +430,32 @@ int sendExitBowman(char *data) {
     if (strcmp(response.header, "CON_OK") == 0) {
         printToConsole("Received CON_OK from Discovery\n");
         close(discoverySFD);
+        free(response.header);
+        free(response.data);
         return TRUE;
     } else {
         printError("Error receiving CON_OK from Discovery\n");
+        close(discoverySFD);
+        free(response.header);
+        free(response.data);
         return FALSE;
     }
+
+}
+
+int getPlaylistFD(char *playlistName) {
+    char *folderPath = (poole.folder[0] == '/') ? (poole.folder + 1) : poole.folder;
+    char *playlistPath;
+    asprintf(&playlistPath, "%s/%s", folderPath, playlistName);
+
+    int playlistFd;
+    if ((playlistFd = open(playlistPath, O_RDONLY)) < 0) {
+        printError("Error opening playlist file\n");
+        free(playlistPath);
+        return -1;
+    }
+
+    return playlistFd;
 }
 
 /**
@@ -470,15 +493,49 @@ int processBowmanMessage(SocketMessage message, int bowmanSocket) {
                 if (pthread_create(&downloadSongThread, NULL, downloadSong, (void *)downloadThreadInfo) != 0) {
                     printError("Error creating downloadSongThread\n");
                     return TRUE;
-                }else {
+                } else {
                     pthread_detach(downloadSongThread);
                 }
-                //downloadSong(message.data, bowmanSocket);
+                // downloadSong(message.data, bowmanSocket);
                 printToConsole("DOWNLOAD SONG\n");
 
             } else if (strcmp(message.header, "DOWNLOAD_LIST") == 0) {
-                // downloadPlaylist(message.data, bowmanSocket);
                 printToConsole("DOWNLOAD PLAYLIST\n");
+                int playlistFd = getPlaylistFD(message.data);
+                if (playlistFd == -1) {
+                    printError("Error getting playlist file descriptor\n");
+                } else {
+                    char *numOfSongs = readUntil('\n', playlistFd);
+                    int numOfSongsInt = atoi(numOfSongs);
+                    free(numOfSongs);
+                    //! TODO: MAKE THREAD ARRAY GLOBAL
+                    pthread_t downloadSongThread[numOfSongsInt];
+
+                    for (int i = 0; i < numOfSongsInt; i++) {
+                        char *songName = readUntil('\n', playlistFd);
+                        char *buffer;
+                        asprintf(&buffer, "Song name: %s\n", songName);
+                        printToConsole(buffer);
+                        free(buffer);
+                        if (songName != NULL) {
+                            DownloadThreadInfo *downloadThreadInfo = malloc(sizeof(DownloadThreadInfo));
+                            if (downloadThreadInfo == NULL) {
+                                printError("Error allocating memory for downloadThreadInfo\n");
+                            }
+                            downloadThreadInfo->filename = strdup(songName);
+                            downloadThreadInfo->socketFD = bowmanSocket;
+
+                            if (pthread_create(&downloadSongThread[i], NULL, downloadSong, (void *)downloadThreadInfo) != 0) {
+                                printError("Error creating downloadSongThread\n");
+                            } else {
+                                pthread_detach(downloadSongThread[i]);
+                                sleep(1);
+                            }
+                            free(songName);
+                        }
+                    }
+                    close(playlistFd);
+                }
 
             } else {
                 printError("Error processing message from Bowman type 0x03\n");
@@ -511,7 +568,8 @@ int processBowmanMessage(SocketMessage message, int bowmanSocket) {
                     response.data = strdup("");
 
                     sendSocketMessage(bowmanSocket, response);
-                }else {
+                    
+                } else {
                     response.type = 0x06;
                     response.headerLength = strlen("CON_KO");
                     response.header = strdup("CON_KO");

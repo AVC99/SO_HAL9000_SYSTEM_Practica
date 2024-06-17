@@ -23,8 +23,9 @@
 
 extern Bowman bowman;
 int discoverySocketFD, pooleSocketFD, isPooleConnected = FALSE;
-pthread_mutex_t isPooleConnectedMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t isPooleConnectedMutex;
 pthread_t listenThread;
+
 
 extern ChunkInfo *chunkInfo;
 extern pthread_mutex_t chunkInfoMutex;
@@ -63,7 +64,8 @@ void connectToPoole(SocketMessage response) {
 
     printToConsole("Connected to Poole\n");
     free(dataCopy);
-
+    isPooleConnected = FALSE;
+    pthread_mutex_init(&isPooleConnectedMutex, NULL);
     // Send message to Poole
     SocketMessage m;
     m.type = 0x01;
@@ -97,7 +99,7 @@ void connectToPoole(SocketMessage response) {
             exit(1);
         }
 
-        pthread_detach(listenThread);
+        //pthread_detach(listenThread);
 
     } else {
         printError("Error connecting to Poole\n");
@@ -289,7 +291,7 @@ void checkDownloads() {
     char *buffer;
 
     pthread_mutex_lock(&chunkInfoMutex);
-    for (int i = 0; i <= nOfDownloadingSongs; i++) {
+    for (int i = 0; i < nOfDownloadingSongs; i++) {
         asprintf(&buffer, "Downloading song: %s\n", chunkInfo[i].filename);
         printToConsole(buffer);
         free(buffer);
@@ -305,7 +307,7 @@ void checkDownloads() {
                 progressBar[j] = ' ';
         }
         progressBar[barLength] = '\0';
-        asprintf(&buffer, "Progress: [%s] %.2f%%\n", progressBar, percentage);
+        asprintf(&buffer, "Progress: [%s] %.2f%% (%d/%d)\n", progressBar, percentage, chunkInfo[i].downloadedChunks, chunkInfo[i].totalChunks);
         printToConsole(buffer);
         free(buffer);
     }
@@ -451,6 +453,11 @@ void logout() {
         free(m.data);
 
         printToConsole("Sent LOGOUT message to Poole\n");
+        sleep(1);
+        pthread_mutex_unlock(&isPooleConnectedMutex);
+        isPooleConnected = FALSE;
+        pthread_cancel(listenThread);
+
         pthread_join(listenThread, NULL);
         printToConsole("Thread joined\n");
         close(pooleSocketFD);
