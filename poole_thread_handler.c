@@ -11,11 +11,14 @@
 
 #include "io_utils.h"
 #include "network_utils.h"
+#include "semaphore_v2.h"
 #include "struct_definitions.h"
 
-extern pthread_mutex_t isPooleConnectedMutex;
-extern volatile int terminate;
+extern pthread_mutex_t isPooleConnectedMutex, pipeMutex;
+extern int terminate;
 extern Poole poole;
+extern int monolithPipe[2];
+extern semaphore syncMonolithSemaphore;
 pthread_mutex_t socketMutex = PTHREAD_MUTEX_INITIALIZER;
 
 /**
@@ -25,7 +28,10 @@ pthread_mutex_t socketMutex = PTHREAD_MUTEX_INITIALIZER;
 void listSongs(int bowmanSocket) {
     printToConsole("Listing songs\n");
     int fd[2];
-    pipe(fd);
+    if (pipe(fd)) {
+        printError("Error creating pipe\n");
+        return;
+    }
     pid_t pid = fork();
 
     if (pid == 0) {
@@ -366,6 +372,29 @@ int sendFileInfo(char *songName, int bowmanSocket) {
 
     int randomId = getRand(1, 1000);  // random id between 1 and 1000 inclusive
 
+    // SEND SIGNAL TO MONOLITH TO LOG THE DOWNLOAD
+    SEM_signal(&syncMonolithSemaphore);
+    printToConsole("Signaled Monolith\n");
+    char *monolithBuffer = strdup(songName);
+    char *b;
+    for (size_t i = 0; i <= strlen(songName); i++) {
+        if (songName[i] == '\0') {
+            printToConsole("END OF STRING FOUND\n");
+        } else {
+            asprintf(&b, "(%c)\n", songName[i]);
+            printToConsole(b);
+            free(b);
+        }
+    }
+    pthread_mutex_lock(&pipeMutex);
+    ssize_t bytesWritten = write(monolithPipe[1], songName, strlen(songName));
+    pthread_mutex_unlock(&pipeMutex);
+    free(monolithBuffer);
+
+    if (bytesWritten < 0) {
+        printError("Error writing to monolith pipe\n");
+    }
+
     SocketMessage m;
     m.type = 0x04;
     m.headerLength = strlen("NEW_FILE");
@@ -440,7 +469,6 @@ int sendExitBowman(char *data) {
         free(response.data);
         return FALSE;
     }
-
 }
 
 int getPlaylistFD(char *playlistName) {
@@ -568,7 +596,7 @@ int processBowmanMessage(SocketMessage message, int bowmanSocket) {
                     response.data = strdup("");
 
                     sendSocketMessage(bowmanSocket, response);
-                    
+
                 } else {
                     response.type = 0x06;
                     response.headerLength = strlen("CON_KO");

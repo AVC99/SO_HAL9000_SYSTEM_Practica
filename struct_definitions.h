@@ -8,6 +8,7 @@
 #define DOWNLOAD_SONG_PORT 8054
 #define BUFFER_SIZE 256
 #define MAX_BOWMANS 20
+#define PIPE_BUFFER_SIZE 256
 #define FILE_MAX_DATA_SIZE (BUFFER_SIZE - 3 - strlen("FILE_DATA")) // 256 - 3 - 9 = 244
 typedef struct
 {

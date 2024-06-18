@@ -20,7 +20,23 @@ void printError(char *x) {
     write(2, x, strlen(x));
     fflush(stderr);
 }
+char* prependToBeginning(const char* original, const char* toPrepend) {
+    // Calculate new string size
+    size_t newSize = strlen(original) + strlen(toPrepend) + 1; // +1 for null terminator
 
+    // Allocate memory for the new string
+    char* newString = malloc(newSize);
+    if (newString == NULL) {
+        perror("Unable to allocate memory for new string");
+        exit(EXIT_FAILURE);
+    }
+
+    // Construct the new string
+    strcpy(newString, toPrepend); // Copy the prefix
+    strcat(newString, original); // Append the original string
+
+    return newString;
+}
 char *readUntil(char del, int fd) {
     char *chain = malloc(sizeof(char) * 1);
     char c;
