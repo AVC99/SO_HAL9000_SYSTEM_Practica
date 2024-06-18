@@ -196,7 +196,8 @@ void commandInterpreter() {
             }
         }
     } while (continueReading == TRUE);
-    // free(command); I FREE AT CLOSE PROGRAM
+     free(command); 
+     command=NULL;
 }
 
 int main(int argc, char* argv[]) {

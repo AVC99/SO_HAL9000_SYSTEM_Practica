@@ -57,13 +57,10 @@ void sendSocketFile(int socketFD, SocketMessage message, int dataLength) {
     }
 
     size_t start_j = dataLength_ + start_i;
-    int paddingCounter = 0;
     for (size_t j = 0; j < 256 - start_j; j++) {
         buffer[j + start_j] = '\0';
         //printToConsole("I ADDED PADDING\n");
-        paddingCounter++;
     }
-    printf("Padding added: %d\n", paddingCounter);
 
     ssize_t bytesWritten = write(socketFD, buffer, 256);
     if (bytesWritten < 0) {
@@ -179,7 +176,10 @@ SocketMessage getSocketMessage(int clientFD) {
     //char *buffer;
     SocketMessage message;
     ssize_t numBytes;
-
+    message.type = 0;
+    message.headerLength = 0;
+    message.header = NULL;
+    message.data = NULL;
     // get the type
     uint8_t type;
     numBytes = read(clientFD, &type, 1);
@@ -205,6 +205,10 @@ SocketMessage getSocketMessage(int clientFD) {
     // get the header
     char *header = malloc(sizeof(char) * headerLength + 1);
     numBytes = read(clientFD, header, headerLength);
+    if(header == NULL){
+        printError("Error reading the header\n");
+        
+    }
     if (numBytes < headerLength) {
         printError("Error reading the header\n");
         free(header);
@@ -245,7 +249,9 @@ void sendError(int clientFD) {
     SocketMessage message;
     message.type = 0x07;
     message.headerLength = strlen("UNKNOWN");
-    message.header = "UNKNOWN";
+    message.header = strdup("UNKNOWN");
     message.data = strdup("");
     sendSocketMessage(clientFD, message);
+    free(message.data);
+    free(message.header);
 }

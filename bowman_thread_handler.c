@@ -120,7 +120,6 @@ void* downloadThreadHandler(void* arg) {
         pthread_mutex_unlock(&consoleMutex);
         nOfDownloadingSongs = 1;
     } else {
-        
         chunkInfo = realloc(chunkInfo, sizeof(ChunkInfo) * (nOfDownloadingSongs + 1));
         chunkInfo[nOfDownloadingSongs].totalChunks = numberOfChunks;
         chunkInfo[nOfDownloadingSongs].downloadedChunks = 0;
@@ -178,7 +177,7 @@ void* downloadThreadHandler(void* arg) {
             chunkInfo[chunkInfoIndex].downloadedChunks++;
             printToConsole("Last chunk\n");
             free(chunkInfo[chunkInfoIndex].filename);
-            
+
             nOfDownloadingSongs--;
 
             pthread_mutex_unlock(&chunkInfoMutex);
@@ -201,15 +200,13 @@ void* downloadThreadHandler(void* arg) {
     asprintf(&buffer, "Ending thread with ID %ld\n", id);
     printToConsole(buffer);
     free(buffer);
-    asprintf(&buffer, "Downloaded MD5: %s\n", downloadedMD5);
-    printToConsole(buffer);
-    free(buffer);
-    asprintf(&buffer, "Original MD5: %s\n", md5sum);
-    printToConsole(buffer);
-    free(buffer);
 
     if (strcmp(downloadedMD5, md5sum) == 0) {
-        printToConsole("MD5sums match\n");
+        asprintf(&buffer, "%s downloaded correctly (MD5s match)\n", filename);
+        printToConsole(buffer);
+        free(buffer);
+        printToConsole("Bowman $ ");
+
         SocketMessage m;
         m.type = 0x05;
         m.headerLength = strlen("CHECK_OK");
@@ -219,8 +216,13 @@ void* downloadThreadHandler(void* arg) {
         sendSocketMessage(pooleSocketFD, m);
         free(m.header);
         free(m.data);
+
     } else {
-        printError("MD5sums do not match\n");
+        asprintf(&buffer, "%s downloaded incorrectly (MD5s do not match)\n", filename);
+        printToConsole(buffer);
+        free(buffer);
+        printToConsole("Bowman $ ");
+
         SocketMessage m;
         m.type = 0x05;
         m.headerLength = strlen("CHECK_KO");
@@ -348,6 +350,26 @@ void* listenToPoole(void* arg) {
                     isPooleConnected = FALSE;
                     printToConsole("IS Pooole Connected set to FALSE\n");
                     pthread_mutex_unlock(&isPooleConnectedMutex);
+                } else if (strcmp(response.header, "EXIT_POOLE") == 0) {
+                    printToConsole("Poole disconnected\n");
+
+                    SocketMessage m;
+                    m.type = 0x06;
+                    m.headerLength = strlen("CON_OK");
+                    m.header = strdup("CON_OK");
+                    m.data = strdup("");
+
+                    sendSocketMessage(pooleSocketFD, m);
+
+                    free(m.header);
+                    free(m.data);
+                    sleep(1);
+
+                    pthread_mutex_lock(&isPooleConnectedMutex);
+                    isPooleConnected = FALSE;
+                    printToConsole("IS Pooole Connected set to FALSE\n");
+                    pthread_mutex_unlock(&isPooleConnectedMutex);
+                    close(pooleSocketFD);
                 } else {
                     printError("Unknown header\n");
                 }

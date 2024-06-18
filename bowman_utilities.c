@@ -454,9 +454,6 @@ void logout() {
 
         printToConsole("Sent LOGOUT message to Poole\n");
         sleep(1);
-        pthread_mutex_unlock(&isPooleConnectedMutex);
-        isPooleConnected = FALSE;
-        pthread_cancel(listenThread);
 
         pthread_join(listenThread, NULL);
         printToConsole("Thread joined\n");

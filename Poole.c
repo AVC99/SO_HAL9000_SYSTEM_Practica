@@ -15,7 +15,7 @@
 #define MAX_THREADS 50
 
 int terminate = FALSE, endMonolith = FALSE;
-int inputFileFd, discoverySocketFD, bowmanSocketFD, numThreads = 0;
+int inputFileFd, discoverySocketFD, bowmanSocketFD, numThreads = 0, bowmanSockets[MAX_THREADS];
 Poole poole;
 pthread_mutex_t terminateMutex = PTHREAD_MUTEX_INITIALIZER, numThreadsMutex = PTHREAD_MUTEX_INITIALIZER, pipeMutex;
 pthread_t threads[MAX_THREADS];
@@ -84,8 +84,9 @@ void listenForBowmans() {
                 free(pBowmanSocket);
                 exit(1);
             } else {
+                bowmanSockets[numThreads] = bowmanSocket;
                 numThreads++;
-                pthread_detach(threads[numThreads - 1]);
+                //pthread_detach(threads[numThreads - 1]);
             }
         } else {
             printError("Error: Maximum number of threads reached\n");
@@ -179,6 +180,22 @@ void connectToDiscovery(int isExit) {
     close(discoverySocketFD);
 }
 
+void notifyBowmans(){
+    for (int i =0; i < numThreads; i++){
+        SocketMessage m;
+        m.type = 0x06;
+        m.headerLength = strlen("EXIT_POOLE");
+        m.header = strdup("EXIT_POOLE");
+        m.data = strdup("");
+
+        sendSocketMessage(bowmanSockets[i], m);
+
+        free(m.header);
+        free(m.data);
+        pthread_join(threads[i], NULL);
+    }
+}
+
 /**
  * @brief Closes the program correctly cleaning the memory and closing the file descriptors
  */
@@ -192,8 +209,9 @@ void closeProgram() {
     endMonolith = TRUE;
     close(monolithPipe[1]);
 
-    connectToDiscovery(TRUE);
+    notifyBowmans();
 
+    connectToDiscovery(TRUE);
     printToConsole("Closing program\n");
     freeMemory();
     closeFds();
@@ -271,14 +289,18 @@ void phaseOneTesting() {
     printToConsole(buffer);
     free(buffer);
 }
-
+/**
+ * @brief Initializes the semaphores
+ */
 void initializeSemaphore() {
     SEM_constructor_with_name(&writeMonolithSemaphore, ftok("Poole.c", 'a'));
     SEM_init(&writeMonolithSemaphore, 1);
     SEM_constructor(&syncMonolithSemaphore);
     SEM_init(&syncMonolithSemaphore, 0);
 }
-
+/**
+ * @brief Starts the Monolith process
+ */
 void startMonolith() {
     initializeSemaphore();
 

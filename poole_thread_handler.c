@@ -19,6 +19,7 @@ extern int terminate;
 extern Poole poole;
 extern int monolithPipe[2];
 extern semaphore syncMonolithSemaphore;
+extern pthread_mutex_t terminateMutex;
 pthread_mutex_t socketMutex = PTHREAD_MUTEX_INITIALIZER;
 
 /**
@@ -311,7 +312,6 @@ void sendFile(char *fileName, int bowmanSocket, int ID) {
             memcpy(m.data, data, dataLength);
             sendSocketFile(bowmanSocket, m, dataLength);
             sleep(1);
-            printToConsole("Sending START/MID message to Bowman\n");
             free(m.header);
             free(m.data);
             dataLength = 0;
@@ -332,7 +332,6 @@ void sendFile(char *fileName, int bowmanSocket, int ID) {
         m.dataLength = dataLength;
         memcpy(m.data, data, dataLength);
         sendSocketFile(bowmanSocket, m, dataLength);
-        printToConsole("Sending END message to Bowman\n");
         free(m.header);
         free(m.data);
     }
@@ -359,10 +358,11 @@ int sendFileInfo(char *songName, int bowmanSocket) {
         sendError(bowmanSocket);
         return -1;
     }
+
     // get the md5 hash
     char *md5Hash = getMD5sum(songName);
     char *buffer;
-    asprintf(&buffer, "md5sum %s", md5Hash);
+    asprintf(&buffer, "md5sum %s\n", md5Hash);
     printToConsole(buffer);
     free(buffer);
 
@@ -376,21 +376,12 @@ int sendFileInfo(char *songName, int bowmanSocket) {
     SEM_signal(&syncMonolithSemaphore);
     printToConsole("Signaled Monolith\n");
     char *monolithBuffer = strdup(songName);
-    char *b;
-    for (size_t i = 0; i <= strlen(songName); i++) {
-        if (songName[i] == '\0') {
-            printToConsole("END OF STRING FOUND\n");
-        } else {
-            asprintf(&b, "(%c)\n", songName[i]);
-            printToConsole(b);
-            free(b);
-        }
-    }
+
     pthread_mutex_lock(&pipeMutex);
     ssize_t bytesWritten = write(monolithPipe[1], songName, strlen(songName));
     pthread_mutex_unlock(&pipeMutex);
-    free(monolithBuffer);
 
+    free(monolithBuffer);
     if (bytesWritten < 0) {
         printError("Error writing to monolith pipe\n");
     }
@@ -606,10 +597,6 @@ int processBowmanMessage(SocketMessage message, int bowmanSocket) {
                     sendSocketMessage(bowmanSocket, response);
                 }
 
-                // I DO THE THING WERE BOWMAN DISCONNECTS FROM POOLE AND DISCOVERY
-                // SO AS LONG AS I END THE THREAD IM OK
-                // TODO CHECK IF THE THREAD IS CORRECTLY ENDED
-
                 free(response.header);
                 free(response.data);
 
@@ -664,17 +651,34 @@ void *bowmanThreadHandler(void *arg) {
     free(m.data);
 
     int terminateThread = FALSE;
+    SocketMessage message;
 
-    while (terminateThread == FALSE) {
+    pthread_mutex_lock(&terminateMutex);
+    while (terminateThread == FALSE && terminate == FALSE) {
+        pthread_mutex_unlock(&terminateMutex);
         printToConsole("Waiting for message from Bowman\n");
-        SocketMessage message = getSocketMessage(bowmanSocket);
+        message = getSocketMessage(bowmanSocket);
         printToConsole("Received message from Bowman\n");
 
         terminateThread = processBowmanMessage(message, bowmanSocket);
 
-        free(message.header);
+        if (message.data != NULL) {
+            free(message.data);
+            message.data = NULL;
+        }
+        if (message.header != NULL) {
+            free(message.header);
+            message.header = NULL;
+        }
+    }
+
+    if (message.data != NULL) {
         free(message.data);
     }
+    if (message.header != NULL) {
+        free(message.header);
+    }
+
     pthread_mutex_destroy(&socketMutex);
     close(bowmanSocket);
     return NULL;
