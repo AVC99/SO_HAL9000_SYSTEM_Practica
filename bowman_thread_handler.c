@@ -32,16 +32,37 @@ int nOfDownloadingSongs;
  */
 void listSongs_BH(SocketMessage response) {
     // SHOW THE SONG IN THE CONSOLE
+    printToConsole("\nSongs in the Poole server:\n\t-");
+    char* buffer;
     for (size_t i = 0; i < strlen(response.data); i++) {
         if (response.data[i] == '&') {
             response.data[i] = '\n';
+            asprintf(&buffer, "%c", response.data[i]);
+            pthread_mutex_lock(&consoleMutex);
+            printToConsole(buffer);
+            pthread_mutex_unlock(&consoleMutex);
+            free(buffer);
+            if (i < strlen(response.data) - 1) {
+                printToConsole("\t-");
+            }
+
+        } else {
+            asprintf(&buffer, "%c", response.data[i]);
+
+            pthread_mutex_lock(&consoleMutex);
+            printToConsole(buffer);
+            pthread_mutex_unlock(&consoleMutex);
+            free(buffer);
         }
     }
-
-    char* buffer;
-    asprintf(&buffer, "Songs in the Poole server:\n%s", response.data);
-    printToConsole(buffer);
-    free(buffer);
+}
+/**
+ * @brief Prints the Bowman command line
+ */
+void printBowmanCmd() {
+    pthread_mutex_lock(&consoleMutex);
+    printToConsole("Bowman $ ");
+    pthread_mutex_unlock(&consoleMutex);
 }
 /**
  * @brief Lists the playlists in the Poole server no need to free the response
@@ -58,18 +79,37 @@ void listPlaylists_BH(SocketMessage response) {
         printError("Error parsing the response\n");
         return;
     }
-
+    char* buffer;
+    pthread_mutex_lock(&consoleMutex);
+    printToConsole("Playlist in the Poole server:\n");
+    pthread_mutex_unlock(&consoleMutex);
     for (char* c = start; *c != '\0'; c++) {
-        if (*c == '&' || *c == '#') {
-            *c = '\n';
+        if (*c == '&') {
+            asprintf(&buffer, "\n\t-");
+            pthread_mutex_lock(&consoleMutex);
+            printToConsole(buffer);
+            pthread_mutex_unlock(&consoleMutex);
+            free(buffer);
+        } else if (*c == '#' && *(c + 1) == '#' && *(c + 2) != '\0') {
+            asprintf(&buffer, "\n-");
+            pthread_mutex_lock(&consoleMutex);
+            printToConsole(buffer);
+            pthread_mutex_unlock(&consoleMutex);
+            free(buffer);
+
+        } else if (*c == '&' && *(c + 1) == '#' && *(c + 2) == '#') {
+            c += 3;
+
+        } else {
+            asprintf(&buffer, "%c", *c);
+            pthread_mutex_lock(&consoleMutex);
+            printToConsole(buffer);
+            pthread_mutex_unlock(&consoleMutex);
+            free(buffer);
         }
     }
-
-    char* buffer;
-    asprintf(&buffer, "Playlists in the Poole server:\n%s", start);
-    pthread_mutex_lock(&consoleMutex);
+    asprintf(&buffer, "%s\n", response.data);
     printToConsole(buffer);
-    pthread_mutex_unlock(&consoleMutex);
     free(buffer);
 }
 /**
@@ -88,9 +128,11 @@ void* downloadThreadHandler(void* arg) {
     char* buffer;
     pthread_mutex_lock(&consoleMutex);
     asprintf(&buffer, "\nDownloading file %s with size %s and md5sum %s ID %ld \n", filename, size, md5sum, id);
-    pthread_mutex_unlock(&consoleMutex);
     printToConsole(buffer);
+    pthread_mutex_unlock(&consoleMutex);
     free(buffer);
+
+    printBowmanCmd();
 
     int idLength = strlen(ID) + 1;  // +1 for the & symbol in the data that is part of the pure data
     int sizeInt = atoi(size);
@@ -115,9 +157,9 @@ void* downloadThreadHandler(void* arg) {
         chunkInfo->totalChunks = numberOfChunks;
         chunkInfo->downloadedChunks = 0;
         chunkInfo->filename = strdup(filename);
-        pthread_mutex_lock(&consoleMutex);
-        printToConsole("First SONG\n");
-        pthread_mutex_unlock(&consoleMutex);
+        //pthread_mutex_lock(&consoleMutex);
+        //printToConsole("First SONG\n");
+        //pthread_mutex_unlock(&consoleMutex);
         nOfDownloadingSongs = 1;
     } else {
         chunkInfo = realloc(chunkInfo, sizeof(ChunkInfo) * (nOfDownloadingSongs + 1));
@@ -127,24 +169,22 @@ void* downloadThreadHandler(void* arg) {
         chunkInfo[nOfDownloadingSongs].filename = strdup(filename);
         chunkInfoIndex = nOfDownloadingSongs;
         nOfDownloadingSongs++;
-        char* buffer;
-        asprintf(&buffer, "Number of downloading songs %d\n", nOfDownloadingSongs);
-        pthread_mutex_lock(&consoleMutex);
-        printToConsole(buffer);
-        pthread_mutex_unlock(&consoleMutex);
-        free(buffer);
+        //char* buffer;
+        //asprintf(&buffer, "Number of downloading songs %d\n", nOfDownloadingSongs);
+        //pthread_mutex_lock(&consoleMutex);
+        //printToConsole(buffer);
+        //pthread_mutex_unlock(&consoleMutex);
+        //free(buffer);
     }
     pthread_mutex_unlock(&chunkInfoMutex);
 
     asprintf(&buffer, "Preparing to recive %d chunks\n", numberOfChunks);
+    pthread_mutex_lock(&consoleMutex);
     printToConsole(buffer);
+    pthread_mutex_unlock(&consoleMutex);
     free(buffer);
 
     int lastChunkSize = sizeInt % (maxDataSize);
-
-    asprintf(&buffer, "Last Chunk size %d\n", lastChunkSize);
-    printToConsole(buffer);
-    free(buffer);
 
     const char* folderPath = (bowman.folder[0] == '/') ? (bowman.folder + 1) : bowman.folder;
 
@@ -158,7 +198,9 @@ void* downloadThreadHandler(void* arg) {
     //! This is blocking
     for (int i = 0; i < numberOfChunks; i++) {
         if (msgrcv(downloadQueue, &message, sizeof(queueMessage) - sizeof(long), id, 0) < 0) {  // id 0 gets all the messages
+            pthread_mutex_lock(&consoleMutex);
             printError("ERROR: While reciving the message");
+            pthread_mutex_unlock(&consoleMutex);
             free(filePath);
             close(fd);
             return NULL;
@@ -175,7 +217,6 @@ void* downloadThreadHandler(void* arg) {
 
             pthread_mutex_lock(&chunkInfoMutex);
             chunkInfo[chunkInfoIndex].downloadedChunks++;
-            printToConsole("Last chunk\n");
             free(chunkInfo[chunkInfoIndex].filename);
 
             nOfDownloadingSongs--;
@@ -193,7 +234,6 @@ void* downloadThreadHandler(void* arg) {
             pthread_mutex_unlock(&chunkInfoMutex);
         }
     }
-    printToConsole("Download finished\n");
 
     char* downloadedMD5 = getMD5sum(filePath);
 
@@ -203,9 +243,8 @@ void* downloadThreadHandler(void* arg) {
 
     if (strcmp(downloadedMD5, md5sum) == 0) {
         asprintf(&buffer, "%s downloaded correctly (MD5s match)\n", filename);
-        printToConsole(buffer);
+
         free(buffer);
-        printToConsole("Bowman $ ");
 
         SocketMessage m;
         m.type = 0x05;
@@ -219,7 +258,9 @@ void* downloadThreadHandler(void* arg) {
 
     } else {
         asprintf(&buffer, "%s downloaded incorrectly (MD5s do not match)\n", filename);
+        pthread_mutex_lock(&consoleMutex);
         printToConsole(buffer);
+        pthread_mutex_unlock(&consoleMutex);
         free(buffer);
         printToConsole("Bowman $ ");
 
@@ -237,6 +278,7 @@ void* downloadThreadHandler(void* arg) {
     free(data);
     free(filePath);
     free(downloadedMD5);
+    printBowmanCmd();
 
     return NULL;
 }
@@ -277,8 +319,10 @@ void* listenToPoole(void* arg) {
             case 0x02: {
                 if (strcmp(response.header, "SONGS_RESPONSE") == 0) {
                     listSongs_BH(response);
+                    printBowmanCmd();
                 } else if (strcmp(response.header, "PLAYLISTS_RESPONSE") == 0) {
                     listPlaylists_BH(response);
+                    printBowmanCmd();
                 } else {
                     printError("Unknown header\n");
                 }
@@ -294,6 +338,7 @@ void* listenToPoole(void* arg) {
                     pthread_t thread;
                     pthread_create(&thread, NULL, downloadThreadHandler, (void*)dataCopy);
                     pthread_detach(thread);
+                    printBowmanCmd();
 
                 } else if (strcmp(response.header, "FILE_DATA") == 0) {
                     // printToConsole("FILE DATA\n");
@@ -370,6 +415,7 @@ void* listenToPoole(void* arg) {
                     printToConsole("IS Pooole Connected set to FALSE\n");
                     pthread_mutex_unlock(&isPooleConnectedMutex);
                     close(pooleSocketFD);
+                    printBowmanCmd();
                 } else {
                     printError("Unknown header\n");
                 }
@@ -382,8 +428,6 @@ void* listenToPoole(void* arg) {
         }
         free(response.header);
         free(response.data);
-        // TODO : FIX THIS IT ACTUALLY APEARS HERE AND IN MAIN BOWMAN MINOR BUG
-        // printToConsole("Bowman> ");
     }
     pthread_mutex_unlock(&isPooleConnectedMutex);
     // close the message queue and mutexes

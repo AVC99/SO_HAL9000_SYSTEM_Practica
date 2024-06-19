@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include <fcntl.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,6 +17,8 @@ Bowman bowman;
 extern int discoverySocketFD, pooleSocketFD, isPooleConnected;
 char* command;
 extern ChunkInfo* chunkInfo;
+pthread_t listenThread;
+extern pthread_mutex_t isPooleConnectedMutex;
 
 void freeMemory() {
     free(bowman.username);
@@ -105,11 +108,19 @@ void phaseOneTesting() {
  */
 void commandInterpreter() {
     int bytesRead;
-
+    command = NULL;
     int continueReading = TRUE;
     do {
-        printToConsole("Bowman $ ");
+        pthread_mutex_lock(&isPooleConnectedMutex);
+        if (isPooleConnected == FALSE) {
+            printToConsole("Bowman $ ");
+        } 
+        pthread_mutex_unlock(&isPooleConnectedMutex);
         // READ THE COMMAND
+        if (command != NULL) {
+            free(command);
+            command = NULL;
+        }
         command = readUntil('\n', 0);
         bytesRead = strlen(command);
         if (bytesRead == 0) {
@@ -193,11 +204,12 @@ void commandInterpreter() {
                 printError("ERROR: Please input a valid command.\n");
                 free(command);
                 command = NULL;
+                printToConsole("Bowman $ ");
             }
         }
     } while (continueReading == TRUE);
-     free(command); 
-     command=NULL;
+    free(command);
+    command = NULL;
 }
 
 int main(int argc, char* argv[]) {

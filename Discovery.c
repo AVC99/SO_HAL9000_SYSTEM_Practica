@@ -65,8 +65,6 @@ void closeProgram() {
     pthread_cancel(bowmanThread);
     pthread_cancel(pooleThread);
 
-
-
     pthread_join(bowmanThread, NULL);
     printToConsole("Bowman thread closed\n");
     pthread_join(pooleThread, NULL);
@@ -158,7 +156,7 @@ void *listenToBowman() {
                 free(response.header);
                 free(response.data);
             } else {
-                pthread_mutex_unlock(&numPoolesMutex);
+                
                 printToConsole("Searching for the Poole with less Bowmans\n");
                 int minBowmans = INT_MAX, minBowmansIndex = -1;
                 // Search for the Poole with less Bowmans
@@ -170,31 +168,46 @@ void *listenToBowman() {
                         minBowmansIndex = i;
                     }
                 }
-                char *buffer;
-                asprintf(&buffer, "Poole with less Bowmans: %s\n", pooles[minBowmansIndex].pooleServername);
-                printToConsole(buffer);
-                free(buffer);
-                pooles[minBowmansIndex].numOfBowmans++;
-                pooles[minBowmansIndex].bowmans[pooles[minBowmansIndex].numOfBowmans - 1] = strdup(m.data);
+                if (minBowmansIndex != -1) {  // VALID Poole was found
+                    char *buffer;
+                    asprintf(&buffer, "Poole with less Bowmans: %s\n", pooles[minBowmansIndex].pooleServername);
+                    printToConsole(buffer);
+                    free(buffer);
+                    //* UPDATE THE Poole with the new Bowman
+                    pooles[minBowmansIndex].numOfBowmans++;
+                    pooles[minBowmansIndex].bowmans[pooles[minBowmansIndex].numOfBowmans - 1] = strdup(m.data);
 
-                printToConsole("Sending Poole information to Bowman\n");
-                SocketMessage response;
-                response.type = 0x01;
-                response.headerLength = strlen("CON_OK");
-                response.header = strdup("CON_OK");
-                char *data;
-                asprintf(&data, "%s&%d&%s", pooles[minBowmansIndex].pooleServername, pooles[minBowmansIndex].poolePort,
-                         pooles[minBowmansIndex].pooleIP);
-                response.data = strdup(data);
+                    printToConsole("Sending Poole information to Bowman\n");
+                    SocketMessage response;
+                    response.type = 0x01;
+                    response.headerLength = strlen("CON_OK");
+                    response.header = strdup("CON_OK");
+                    char *data;
+                    asprintf(&data, "%s&%d&%s", pooles[minBowmansIndex].pooleServername, pooles[minBowmansIndex].poolePort,
+                             pooles[minBowmansIndex].pooleIP);
+                    response.data = strdup(data);
 
-                sendSocketMessage(bowmanSocketFD, response);
+                    sendSocketMessage(bowmanSocketFD, response);
+
+                    free(response.header);
+                    free(response.data);
+                    free(data);
+
+                } else {  // NO Poole was found
+                    SocketMessage response;
+                    response.type = 0x01;
+                    response.headerLength = strlen("CON_KO");
+                    response.header = strdup("CON_KO");
+                    response.data = strdup("");
+
+                    sendSocketMessage(bowmanSocketFD, response);
+
+                    free(response.header);
+                    free(response.data);
+                }
 
                 pthread_mutex_unlock(&poolesMutex);
                 pthread_mutex_unlock(&numPoolesMutex);
-
-                free(response.header);
-                free(response.data);
-                free(data);
             }
         } else if (strcmp(m.header, "EXIT") == 0) {
             pthread_mutex_lock(&poolesMutex);
@@ -312,10 +325,13 @@ void *listenToPoole() {
 
             free(response.header);
             free(response.data);
-
+            char *buffer;
             pthread_mutex_lock(&numPoolesMutex);
             for (int i = 0; i < numPooles; i++) {
                 if (strcmp(pooles[i].pooleServername, m.data) == 0) {
+                    asprintf(&buffer, "Poole %s removed from Discovery\n", pooles[i].pooleServername);
+                    printToConsole(buffer);
+                    free(buffer);
                     free(pooles[i].pooleServername);
                     free(pooles[i].pooleIP);
                     for (int j = 0; j < pooles[i].numOfBowmans; j++) {
@@ -346,10 +362,13 @@ void *listenToPoole() {
 
             pthread_mutex_lock(&numPoolesMutex);
             pthread_mutex_lock(&poolesMutex);
-
+            char *buffer;
             for (int i = 0; i < numPooles; i++) {
                 for (int j = 0; j < pooles[i].numOfBowmans; j++) {
                     if (strcmp(pooles[i].bowmans[j], m.data) == 0) {
+                        asprintf(&buffer, "Bowman %s removed from Poole %s\n", m.data, pooles[i].pooleServername);
+                        printToConsole(buffer);
+                        free(buffer);
                         free(pooles[i].bowmans[j]);
                         pooles[i].bowmans[j] = pooles[i].bowmans[pooles[i].numOfBowmans - 1];
                         pooles[i].numOfBowmans--;

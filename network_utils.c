@@ -40,7 +40,7 @@ void sendSocketMessage(int socketFD, SocketMessage message) {
  * @param message The message to send
  * @param dataLength The length of the data
  */
-void sendSocketFile(int socketFD, SocketMessage message, int dataLength) {
+int sendSocketFile(int socketFD, SocketMessage message, int dataLength) {
     char *buffer = malloc(sizeof(char) * 256);
     buffer[0] = message.type;
     buffer[1] = (message.headerLength & 0xFF);
@@ -65,8 +65,10 @@ void sendSocketFile(int socketFD, SocketMessage message, int dataLength) {
     ssize_t bytesWritten = write(socketFD, buffer, 256);
     if (bytesWritten < 0) {
         printError("Error writing to the socket\n");
+        return FALSE;
     }
     free(buffer);
+    return TRUE;
 }
 
 /**

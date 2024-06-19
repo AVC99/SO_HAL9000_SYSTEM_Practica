@@ -263,7 +263,7 @@ void listPlaylists(int bowmanSocket) {
         exit(1);
     }
 }
-void sendFile(char *fileName, int bowmanSocket, int ID) {
+int sendFile(char *fileName, int bowmanSocket, int ID) {
     char *songPath;
     char *folderPath = (poole.folder[0] == '/') ? (poole.folder + 1) : poole.folder;
     asprintf(&songPath, "%s/%s", folderPath, fileName);
@@ -273,7 +273,7 @@ void sendFile(char *fileName, int bowmanSocket, int ID) {
     if (songfd < 0) {
         printError("Error: File not found\n");
         sendError(bowmanSocket);
-        return;
+        return FALSE;
     }
     char *idString;
     asprintf(&idString, "%d", ID);
@@ -294,7 +294,7 @@ void sendFile(char *fileName, int bowmanSocket, int ID) {
         if (bytesRead < 0) {
             printError("Error reading from file\n");
             sendError(bowmanSocket);
-            return;
+            return FALSE;
         }
 
         if ((size_t)dataLength < FILE_MAX_DATA_SIZE) {
@@ -310,7 +310,15 @@ void sendFile(char *fileName, int bowmanSocket, int ID) {
             m.dataLength = dataLength;
             m.data = malloc(dataLength);
             memcpy(m.data, data, dataLength);
-            sendSocketFile(bowmanSocket, m, dataLength);
+            if(sendSocketFile(bowmanSocket, m, dataLength) == FALSE){
+                free(m.header);
+                free(m.data);
+                free(data);
+                free(idString);
+                close(songfd);
+                return FALSE;
+            }
+            
             sleep(1);
             free(m.header);
             free(m.data);
@@ -331,13 +339,22 @@ void sendFile(char *fileName, int bowmanSocket, int ID) {
         m.data = malloc(dataLength);
         m.dataLength = dataLength;
         memcpy(m.data, data, dataLength);
-        sendSocketFile(bowmanSocket, m, dataLength);
+        if (sendSocketFile(bowmanSocket, m, dataLength) == FALSE) {
+            free(m.header);
+            free(m.data);
+            free(data);
+            free(idString);
+            close(songfd);
+            return FALSE;
+        }
+        
         free(m.header);
         free(m.data);
     }
     free(data);
     free(idString);
     close(songfd);
+    return TRUE;
 }
 
 /**
@@ -420,7 +437,14 @@ void *downloadSong(void *arg) {
     printToConsole("Downloading song\n");
     int ID = sendFileInfo(args->filename, args->socketFD);
     sleep(1);
-    sendFile(args->filename, args->socketFD, ID);
+    if (sendFile(args->filename, args->socketFD, ID) == FALSE) {
+        printError("Error sending file\n");
+        free(args->filename);
+        free(args);
+        close(args->socketFD);
+        return NULL;
+    }
+    
     free(args->filename);
     free(args);
     return NULL;
@@ -449,9 +473,11 @@ int sendExitBowman(char *data) {
     SocketMessage response = getSocketMessage(discoverySFD);
     if (strcmp(response.header, "CON_OK") == 0) {
         printToConsole("Received CON_OK from Discovery\n");
+        
         close(discoverySFD);
         free(response.header);
         free(response.data);
+        
         return TRUE;
     } else {
         printError("Error receiving CON_OK from Discovery\n");
@@ -473,6 +499,7 @@ int getPlaylistFD(char *playlistName) {
         free(playlistPath);
         return -1;
     }
+    free(playlistPath);
 
     return playlistFd;
 }
