@@ -21,6 +21,7 @@ pthread_mutex_t terminateMutex = PTHREAD_MUTEX_INITIALIZER, numThreadsMutex = PT
 pthread_t threads[MAX_THREADS];
 semaphore writeMonolithSemaphore, syncMonolithSemaphore;
 int monolithPipe[2];
+pid_t pid;
 
 /**
  * @brief Frees the memory allocated for the Poole struct
@@ -86,7 +87,7 @@ void listenForBowmans() {
             } else {
                 bowmanSockets[numThreads] = bowmanSocket;
                 numThreads++;
-                //pthread_detach(threads[numThreads - 1]);
+                // pthread_detach(threads[numThreads - 1]);
             }
         } else {
             printError("Error: Maximum number of threads reached\n");
@@ -113,6 +114,7 @@ void connectToDiscovery(int isExit) {
     printToConsole("Connected to Discovery\n");
 
     if (isExit == FALSE) {
+        printToConsole("Sending NEW_POOLE to Discovery\n");
         SocketMessage m;
         m.type = 0x01;
         m.headerLength = strlen("NEW_POOLE");
@@ -128,11 +130,12 @@ void connectToDiscovery(int isExit) {
         free(m.data);
         free(data);
     } else if (isExit == TRUE) {
+        printToConsole("Exiting Discovery\n");
         SocketMessage m;
         m.type = 0x06;
         m.headerLength = strlen("EXIT_POOLE");
         m.header = strdup("EXIT_POOLE");
-        m.data = strdup("");
+        m.data = strdup(poole.servername);
 
         sendSocketMessage(discoverySocketFD, m);
 
@@ -180,8 +183,8 @@ void connectToDiscovery(int isExit) {
     close(discoverySocketFD);
 }
 
-void notifyBowmans(){
-    for (int i =0; i < numThreads; i++){
+void notifyBowmans() {
+    for (int i = 0; i < numThreads; i++) {
         SocketMessage m;
         m.type = 0x06;
         m.headerLength = strlen("EXIT_POOLE");
@@ -210,8 +213,10 @@ void closeProgram() {
     close(monolithPipe[1]);
 
     notifyBowmans();
+    if (pid == 0) {
+        connectToDiscovery(TRUE);
+    }
 
-    connectToDiscovery(TRUE);
     printToConsole("Closing program\n");
     freeMemory();
     closeFds();
@@ -309,7 +314,7 @@ void startMonolith() {
         exit(1);
     }
 
-    pid_t pid = fork();
+    pid = fork();
     if (pid == -1) {
         printError("Error creating monolith\n");
         exit(1);
@@ -333,7 +338,6 @@ void startMonolith() {
             pthread_mutex_lock(&pipeMutex);
             ssize_t bytesRead = read(monolithPipe[0], pipeBuffer, PIPE_BUFFER_SIZE);
             pthread_mutex_unlock(&pipeMutex);
-            
 
             if (bytesRead == -1) {
                 printError("Error reading from pipe\n");
@@ -351,13 +355,13 @@ void startMonolith() {
             struct stat fileStat;
             fstat(monolithFileFD, &fileStat);
             int fileSize = fileStat.st_size;
-            
+
             if (fileSize == 0) {
-               printToConsole("File is empty\n");
+                printToConsole("File is empty\n");
                 asprintf(&buffer, "1\n%s&1\n", songName);
                 write(monolithFileFD, buffer, strlen(buffer));
                 free(buffer);
-                close(monolithFileFD); 
+                close(monolithFileFD);
 
             } else {
                 printToConsole("File is not empty\n");
@@ -369,7 +373,7 @@ void startMonolith() {
                 char *newContent = malloc(fileSize + strlen(songName) + 10);
                 newContent[0] = '\0';
 
-                for (int i = 0; i< nOfSongs; i++){
+                for (int i = 0; i < nOfSongs; i++) {
                     char *song = readUntil('&', monolithFileFD);
                     char *songPlaysStr = readUntil('\n', monolithFileFD);
                     int songPlays = atoi(songPlaysStr);
@@ -403,7 +407,6 @@ void startMonolith() {
                 write(monolithFileFD, newContent, strlen(newContent));
                 free(newContent);
                 close(monolithFileFD);
-                
             }
             free(songName);
             SEM_signal(&writeMonolithSemaphore);
@@ -435,6 +438,5 @@ int main(int argc, char *argv[]) {
     // connect to Discovery
     connectToDiscovery(FALSE);
 
-    closeProgram();
     return 0;
 }

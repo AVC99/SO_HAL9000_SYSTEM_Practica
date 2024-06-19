@@ -16,7 +16,6 @@
 #include <time.h>
 #include <unistd.h>
 
-
 #include "bowman_thread_handler.h"
 #include "io_utils.h"
 #include "network_utils.h"
@@ -26,7 +25,6 @@ extern Bowman bowman;
 int discoverySocketFD, pooleSocketFD, isPooleConnected = FALSE;
 pthread_mutex_t isPooleConnectedMutex;
 extern pthread_t listenThread;
-
 
 extern ChunkInfo *chunkInfo;
 extern pthread_mutex_t chunkInfoMutex;
@@ -100,7 +98,7 @@ void connectToPoole(SocketMessage response) {
             exit(1);
         }
 
-        //pthread_detach(listenThread);
+        // pthread_detach(listenThread);
 
     } else {
         printError("Error connecting to Poole\n");
@@ -111,14 +109,41 @@ void connectToPoole(SocketMessage response) {
 
     //! IMPORTANT: response is freed in the main function
 }
+/**
+ * @brief If the Bowman is connected to the Poole server, it disconnects from it and sends a message to the Discovery server
+ */
+void logout() {
+    pthread_mutex_lock(&isPooleConnectedMutex);
+    if (isPooleConnected == TRUE) {
+        SocketMessage m;
+        m.type = 0x06;
+        m.headerLength = strlen("EXIT");
+        m.header = strdup("EXIT");
+        m.data = strdup(bowman.username);
+
+        sendSocketMessage(pooleSocketFD, m);
+
+        free(m.header);
+        free(m.data);
+
+        printToConsole("Sent LOGOUT message to Poole\n");
+        sleep(1);
+        isPooleConnected = FALSE;
+        pthread_mutex_unlock(&isPooleConnectedMutex);
+
+        pthread_join(listenThread, NULL);
+        printToConsole("Thread joined\n");
+        close(pooleSocketFD);
+        return;
+    }
+    pthread_mutex_unlock(&isPooleConnectedMutex);
+}
 
 /**
  * @brief Connects to the Discovery server with unstable connection
  * @param isExit to know if the Bowman is exiting (need to send disconnect to Discovery) or not (need to connect to Poole)
  */
 int connectToDiscovery(int isExit) {
-    
-
     if ((discoverySocketFD = createAndConnectSocket(bowman.ip, bowman.port)) < 0) {
         printError("Error connecting to Discovery\n");
         exit(1);
@@ -150,8 +175,13 @@ int connectToDiscovery(int isExit) {
 
     // handle response
     if (isExit == FALSE) {
-        connectToPoole(response);
-        
+        if (response.type == 0x01 && strcmp(response.header, "CON_OK") == 0) {
+            printToConsole("Bowman connected to Discovery\n");
+            connectToPoole(response);
+        } else if (response.type == 0x01 && strcmp(response.header, "CON_KO") == 0) {
+            printError("Error connecting to Discovery NO POOLES\n");
+        }
+
         free(response.header);
         free(response.data);
         close(discoverySocketFD);
@@ -162,10 +192,10 @@ int connectToDiscovery(int isExit) {
             printToConsole("Bowman disconnected from Discovery\n");
         } else if (response.type == 0x06 && strcmp(response.header, "CON_KO") == 0) {
             printError("Error disconnecting from Discovery\n");
-            exit(1);
+            logout();
         }
-        // free(response.header);
-        // free(response.data);
+        free(response.header);
+        free(response.data);
         close(discoverySocketFD);
 
         return TRUE;
@@ -180,8 +210,6 @@ int connectToDiscovery(int isExit) {
  * @brief Lists the songs in the Poole server in the Bowman console
  */
 void listSongs() {
-    
-
     pthread_mutex_lock(&isPooleConnectedMutex);
     if (isPooleConnected == FALSE) {
         pthread_mutex_unlock(&isPooleConnectedMutex);
@@ -302,7 +330,7 @@ void checkDownloads() {
         int progress = (int)(percentage / 100 * barLength);
         char progressBar[barLength + 1];
         for (int j = 0; j < barLength; j++) {
-            if(j < progress)
+            if (j < progress)
                 progressBar[j] = '=';
             else
                 progressBar[j] = ' ';
@@ -316,7 +344,7 @@ void checkDownloads() {
 
     checkDownloadedSongs(folderPath);
 
-    //checkDownloadedPlaylists(folderPath);
+    // checkDownloadedPlaylists(folderPath);
     printToConsole("Bowman $ ");
 }
 
@@ -380,7 +408,6 @@ void listPlaylists() {
  * @param file name of the file to download
  */
 void downloadFile(char *file) {
-
     pthread_mutex_lock(&isPooleConnectedMutex);
     if (isPooleConnected == FALSE) {
         pthread_mutex_unlock(&isPooleConnectedMutex);
@@ -432,34 +459,4 @@ void downloadFile(char *file) {
     } else {
         printError("File has no extension\n");
     }
-}
-/**
- * @brief If the Bowman is connected to the Poole server, it disconnects from it and sends a message to the Discovery server
- */
-void logout() {
-    
-    pthread_mutex_lock(&isPooleConnectedMutex);
-    if (isPooleConnected == TRUE) {
-        SocketMessage m;
-        m.type = 0x06;
-        m.headerLength = strlen("EXIT");
-        m.header = strdup("EXIT");
-        m.data = strdup(bowman.username);
-
-        sendSocketMessage(pooleSocketFD, m);
-
-        free(m.header);
-        free(m.data);
-
-        printToConsole("Sent LOGOUT message to Poole\n");
-        sleep(1);
-        isPooleConnected = FALSE;
-        pthread_mutex_unlock(&isPooleConnectedMutex);
-
-        pthread_join(listenThread, NULL);
-        printToConsole("Thread joined\n");
-        close(pooleSocketFD);
-        return;
-    }
-    pthread_mutex_unlock(&isPooleConnectedMutex);
 }

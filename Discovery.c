@@ -156,7 +156,6 @@ void *listenToBowman() {
                 free(response.header);
                 free(response.data);
             } else {
-                
                 printToConsole("Searching for the Poole with less Bowmans\n");
                 int minBowmans = INT_MAX, minBowmansIndex = -1;
                 // Search for the Poole with less Bowmans
@@ -277,7 +276,10 @@ void *listenToPoole() {
         printToConsole("Message received\n");
 
         if (strcmp(m.header, "NEW_POOLE") == 0) {
-            printToConsole("Poole connected to Discovery\n");
+            char *b;
+            asprintf(&b, "%s connected to Discovery\n", m.data);
+            printToConsole(b);
+            free(b);
 
             // Send response
             SocketMessage response;
@@ -314,19 +316,11 @@ void *listenToPoole() {
             pthread_mutex_unlock(&numPoolesMutex);
         } else if (strcmp(m.header, "EXIT_POOLE") == 0) {
             printToConsole("Poole disconnected\n");
-
             SocketMessage response;
-            response.type = 0x06;
-            response.headerLength = strlen("EXIT_OK");
-            response.header = strdup("EXIT_OK");
-            response.data = strdup("");
-
-            sendSocketMessage(pooleSocketFD, response);
-
-            free(response.header);
-            free(response.data);
+            int found = FALSE;
             char *buffer;
             pthread_mutex_lock(&numPoolesMutex);
+            pthread_mutex_lock(&poolesMutex);
             for (int i = 0; i < numPooles; i++) {
                 if (strcmp(pooles[i].pooleServername, m.data) == 0) {
                     asprintf(&buffer, "Poole %s removed from Discovery\n", pooles[i].pooleServername);
@@ -337,13 +331,38 @@ void *listenToPoole() {
                     for (int j = 0; j < pooles[i].numOfBowmans; j++) {
                         free(pooles[i].bowmans[j]);
                     }
-                    free(pooles[i].bowmans);
                     pooles[i] = pooles[numPooles - 1];
                     numPooles--;
+                    found = TRUE;
+
                     break;
                 }
             }
+            pthread_mutex_unlock(&poolesMutex);
             pthread_mutex_unlock(&numPoolesMutex);
+
+            if (found == TRUE) {
+                response.type = 0x06;
+                response.headerLength = strlen("EXIT_OK");
+                response.header = strdup("EXIT_OK");
+                response.data = strdup("");
+
+                sendSocketMessage(pooleSocketFD, response);
+
+                free(response.header);
+                free(response.data);
+            } else {
+                response.type = 0x06;
+                response.headerLength = strlen("EXIT_KO");
+                response.header = strdup("EXIT_KO");
+                response.data = strdup("");
+
+                sendSocketMessage(pooleSocketFD, response);
+
+                free(response.header);
+                free(response.data);
+            }
+
             free(m.header);
             free(m.data);
 
