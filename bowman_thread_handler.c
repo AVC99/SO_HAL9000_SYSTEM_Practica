@@ -231,7 +231,7 @@ void* downloadThreadHandler(void* arg) {
         pthread_mutex_lock(&consoleMutex);
         printToConsole(buffer);
         pthread_mutex_unlock(&consoleMutex);
-        
+
 
         free(buffer);
 
@@ -319,7 +319,6 @@ void* listenToPoole(void* arg) {
             }
             case 0x04: {
                 if (strcmp(response.header, "NEW_FILE") == 0) {
-                    printToConsole("NEW FILE\n");
                     // I get filename&size&md5sum&ID
                     // I need to open a thread to receive the file
                     // and a message queue to send the data to the thread

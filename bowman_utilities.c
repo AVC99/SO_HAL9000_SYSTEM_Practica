@@ -126,7 +126,6 @@ void logout() {
         free(m.header);
         free(m.data);
 
-        printToConsole("Sent LOGOUT message to Poole\n");
         sleep(1);
         isPooleConnected = FALSE;
         pthread_mutex_unlock(&isPooleConnectedMutex);
@@ -436,7 +435,9 @@ void downloadFile(char *file) {
             free(m.data);
 
         } else if (strcmp(extension, ".txt") == 0) {
-            printToConsole("Downloading playlist\n");
+            asprintf(&buffer, "Downloading playlist: %s\n", file);
+            printToConsole(buffer);
+            free(buffer);
 
             SocketMessage m;
 
