@@ -12,6 +12,6 @@
 void sendSocketMessage(int socketFD, SocketMessage message);
 SocketMessage getSocketMessage(int clientFD);
 int createAndListenSocket(char *IP, int port);
-int createAndConnectSocket(char *IP, int port);
+int createAndConnectSocket(char *IP, int port, int isVerbose);
 void sendError(int clientFD);
 int sendSocketFile(int socketFD, SocketMessage message, int dataLength);

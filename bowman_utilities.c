@@ -35,33 +35,34 @@ extern int nOfDownloadingSongs;
  * @param response message received from the Discovery server
  */
 void connectToPoole(SocketMessage response) {
-    printToConsole("Connecting to Poole\n");
+
     char *dataCopy = strdup(response.data);
     char *pooleServename = strtok(dataCopy, "&");
     char *poolePort = strtok(NULL, "&");
     char *pooleIP = strtok(NULL, "&");
+    
+    char *buffer;
+    asprintf(&buffer, "%s connected to HAL 9000 system (%s), welcome music lover!!\n", bowman.username, pooleServename);
+    printToConsole(buffer);
+    free(buffer);
+    
 
-    printToConsole("Poole servername: ");
-    printToConsole(pooleServename);
-    printToConsole("\n");
+    //printToConsole("Poole port: ");
+    //printToConsole(poolePort);
+    //printToConsole("\n");
 
-    printToConsole("Poole port: ");
-    printToConsole(poolePort);
-    printToConsole("\n");
-
-    printToConsole("Poole IP: ");
-    printToConsole(pooleIP);
-    printToConsole("\n");
+    //printToConsole("Poole IP: ");
+    //printToConsole(pooleIP);
+    //printToConsole("\n");
 
     int poolePortInt = atoi(poolePort);
 
     // CONNECT TO POOLE
-    if ((pooleSocketFD = createAndConnectSocket(pooleIP, poolePortInt)) < 0) {
+    if ((pooleSocketFD = createAndConnectSocket(pooleIP, poolePortInt, FALSE)) < 0) {
         printError("Error connecting to Poole\n");
         exit(1);
     }
 
-    printToConsole("Connected to Poole\n");
     free(dataCopy);
     isPooleConnected = FALSE;
     pthread_mutex_init(&isPooleConnectedMutex, NULL);
@@ -77,14 +78,11 @@ void connectToPoole(SocketMessage response) {
     free(m.header);
     free(m.data);
 
-    printToConsole("Sent message to Poole\n");
 
     SocketMessage pooleResponse = getSocketMessage(pooleSocketFD);
 
-    printToConsole("Received message from Poole\n");
 
     if (pooleResponse.type == 0x01 && strcmp(pooleResponse.header, "CON_OK") == 0) {
-        printToConsole("Poole connected to Bowman\n");
 
         pthread_mutex_lock(&isPooleConnectedMutex);
         isPooleConnected = TRUE;
@@ -106,6 +104,8 @@ void connectToPoole(SocketMessage response) {
     }
     free(pooleResponse.header);
     free(pooleResponse.data);
+
+    printToConsole("Bowman $ ");
 
     //! IMPORTANT: response is freed in the main function
 }
@@ -144,13 +144,12 @@ void logout() {
  * @param isExit to know if the Bowman is exiting (need to send disconnect to Discovery) or not (need to connect to Poole)
  */
 int connectToDiscovery(int isExit) {
-    if ((discoverySocketFD = createAndConnectSocket(bowman.ip, bowman.port)) < 0) {
+    if ((discoverySocketFD = createAndConnectSocket(bowman.ip, bowman.port, FALSE)) < 0) {
         printError("Error connecting to Discovery\n");
         exit(1);
     }
 
     // CONNECTED TO DISCOVERY
-    printToConsole("Connected to Discovery\n");
 
     SocketMessage m;
     if (isExit == FALSE) {
@@ -169,14 +168,12 @@ int connectToDiscovery(int isExit) {
         sendSocketMessage(discoverySocketFD, m);
     }
 
-    printToConsole("Sent message to Discovery\n");
     // Receive response
     SocketMessage response = getSocketMessage(discoverySocketFD);
 
     // handle response
     if (isExit == FALSE) {
         if (response.type == 0x01 && strcmp(response.header, "CON_OK") == 0) {
-            printToConsole("Bowman connected to Discovery\n");
             connectToPoole(response);
         } else if (response.type == 0x01 && strcmp(response.header, "CON_KO") == 0) {
             printError("Error connecting to Discovery NO POOLES\n");
@@ -230,7 +227,6 @@ void listSongs() {
     free(m.header);
     free(m.data);
 
-    printToConsole("Message sent to Poole\n");
 }
 /**
  * @brief Shows the .txt files in the folder
@@ -378,6 +374,7 @@ void clearDownloads() {
     if (chdir(cwd) != 0) {
         printError("Error while changing back to original directory\n");
     }
+    printToConsole("Downloads cleared\nBowman $ ");
 }
 /**
  * @brief Sends LIST_PLAYLISTS message to Poole

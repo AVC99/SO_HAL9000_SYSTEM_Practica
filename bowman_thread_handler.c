@@ -64,53 +64,52 @@ void printBowmanCmd() {
     printToConsole("Bowman $ ");
     pthread_mutex_unlock(&consoleMutex);
 }
+void printPlaylists(char* buffer) {
+    char* playlistToken;
+    char* rest = buffer;
+    char* innerRest;
+
+    // Skip the initial number of playlists as it's not needed for printing
+    strtok_r(rest, "#", &rest);
+
+    // Iterate through each playlist block
+    while ((playlistToken = strtok_r(rest, "#", &rest))) {
+        char* playlistName = strtok_r(playlistToken, "&", &innerRest);
+        printf("Playlist: %s\n", playlistName);
+
+        char* song;
+        // Iterate through each song in the playlist
+        while ((song = strtok_r(innerRest, "&", &innerRest))) {
+            printf(" - %s\n", song);
+        }
+        printf("\n");  // Separate playlists for readability
+    }
+}
 /**
  * @brief Lists the playlists in the Poole server no need to free the response
  * @param response the message received from the Poole server
  */
 void listPlaylists_BH(SocketMessage response) {
-    // SHOW THE SONG IN THE CONSOLE
-    // OUTPUT IS NOT GREAT BUT IT IS WHAT IT IS
 
-    // get the fist characters before &
-    char* start = strchr(response.data, '&');
+    char* dataCopy = strdup(response.data);
+    char* nOfBuffers = strtok(dataCopy, "#");
+    int nOfBuffersInt = atoi(nOfBuffers);
 
-    if (start == NULL) {
-        printError("Error parsing the response\n");
-        return;
-    }
-    char* buffer;
-    pthread_mutex_lock(&consoleMutex);
-    printToConsole("Playlist in the Poole server:\n");
-    pthread_mutex_unlock(&consoleMutex);
-    for (char* c = start; *c != '\0'; c++) {
-        if (*c == '&') {
-            asprintf(&buffer, "\n\t-");
-            pthread_mutex_lock(&consoleMutex);
-            printToConsole(buffer);
-            pthread_mutex_unlock(&consoleMutex);
-            free(buffer);
-        } else if (*c == '#' && *(c + 1) == '#' && *(c + 2) != '\0') {
-            asprintf(&buffer, "\n-");
-            pthread_mutex_lock(&consoleMutex);
-            printToConsole(buffer);
-            pthread_mutex_unlock(&consoleMutex);
-            free(buffer);
-
-        } else if (*c == '&' && *(c + 1) == '#' && *(c + 2) == '#') {
-            c += 3;
-
-        } else {
-            asprintf(&buffer, "%c", *c);
-            pthread_mutex_lock(&consoleMutex);
-            printToConsole(buffer);
-            pthread_mutex_unlock(&consoleMutex);
-            free(buffer);
+    if (nOfBuffersInt > 1) {
+        printPlaylists(response.data);
+        for (int i = 0; i < nOfBuffersInt; i++) {
+            SocketMessage m = getSocketMessage(pooleSocketFD);
+            if (strcmp(m.header, "PLAYLISTS_RESPONSE") == 0) {
+                printPlaylists(m.data);
+            } else {
+                printError("Unknown header\n");
+            }
         }
+    } else {
+        printPlaylists(response.data);
     }
-    asprintf(&buffer, "%s\n", response.data);
-    printToConsole(buffer);
-    free(buffer);
+
+    free(dataCopy);
 }
 /**
  *
@@ -127,7 +126,7 @@ void* downloadThreadHandler(void* arg) {
 
     char* buffer;
     pthread_mutex_lock(&consoleMutex);
-    asprintf(&buffer, "\nDownloading file %s with size %s and md5sum %s ID %ld \n", filename, size, md5sum, id);
+    asprintf(&buffer, "\nDownloading file %s with size %s and md5sum %s \n", filename, size, md5sum);
     printToConsole(buffer);
     pthread_mutex_unlock(&consoleMutex);
     free(buffer);
@@ -138,11 +137,6 @@ void* downloadThreadHandler(void* arg) {
     int sizeInt = atoi(size);
 
     int maxDataSize = BUFFER_SIZE - 3 - strlen("FILE_DATA") - idLength;
-    pthread_mutex_lock(&consoleMutex);
-    asprintf(&buffer, "Max data size %d\n", maxDataSize);
-    printToConsole(buffer);
-    free(buffer);
-    pthread_mutex_unlock(&consoleMutex);
     int numberOfChunks = sizeInt / maxDataSize;
 
     if (sizeInt % maxDataSize != 0) {
@@ -157,9 +151,9 @@ void* downloadThreadHandler(void* arg) {
         chunkInfo->totalChunks = numberOfChunks;
         chunkInfo->downloadedChunks = 0;
         chunkInfo->filename = strdup(filename);
-        //pthread_mutex_lock(&consoleMutex);
-        //printToConsole("First SONG\n");
-        //pthread_mutex_unlock(&consoleMutex);
+        // pthread_mutex_lock(&consoleMutex);
+        // printToConsole("First SONG\n");
+        // pthread_mutex_unlock(&consoleMutex);
         nOfDownloadingSongs = 1;
     } else {
         chunkInfo = realloc(chunkInfo, sizeof(ChunkInfo) * (nOfDownloadingSongs + 1));
@@ -169,20 +163,15 @@ void* downloadThreadHandler(void* arg) {
         chunkInfo[nOfDownloadingSongs].filename = strdup(filename);
         chunkInfoIndex = nOfDownloadingSongs;
         nOfDownloadingSongs++;
-        //char* buffer;
-        //asprintf(&buffer, "Number of downloading songs %d\n", nOfDownloadingSongs);
-        //pthread_mutex_lock(&consoleMutex);
-        //printToConsole(buffer);
-        //pthread_mutex_unlock(&consoleMutex);
-        //free(buffer);
+        // char* buffer;
+        // asprintf(&buffer, "Number of downloading songs %d\n", nOfDownloadingSongs);
+        // pthread_mutex_lock(&consoleMutex);
+        // printToConsole(buffer);
+        // pthread_mutex_unlock(&consoleMutex);
+        // free(buffer);
     }
     pthread_mutex_unlock(&chunkInfoMutex);
 
-    asprintf(&buffer, "Preparing to recive %d chunks\n", numberOfChunks);
-    pthread_mutex_lock(&consoleMutex);
-    printToConsole(buffer);
-    pthread_mutex_unlock(&consoleMutex);
-    free(buffer);
 
     int lastChunkSize = sizeInt % (maxDataSize);
 
@@ -237,12 +226,12 @@ void* downloadThreadHandler(void* arg) {
 
     char* downloadedMD5 = getMD5sum(filePath);
 
-    asprintf(&buffer, "Ending thread with ID %ld\n", id);
-    printToConsole(buffer);
-    free(buffer);
-
     if (strcmp(downloadedMD5, md5sum) == 0) {
         asprintf(&buffer, "%s downloaded correctly (MD5s match)\n", filename);
+        pthread_mutex_lock(&consoleMutex);
+        printToConsole(buffer);
+        pthread_mutex_unlock(&consoleMutex);
+        
 
         free(buffer);
 

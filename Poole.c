@@ -105,7 +105,7 @@ void listenForBowmans() {
 void connectToDiscovery(int isExit) {
     printToConsole("Connecting to Discovery\n");
 
-    if ((discoverySocketFD = createAndConnectSocket(poole.discoveryIP, poole.discoveryPort)) < 0) {
+    if ((discoverySocketFD = createAndConnectSocket(poole.discoveryIP, poole.discoveryPort, TRUE)) < 0) {
         printError("Error connecting to Discovery\n");
         exit(1);
     }

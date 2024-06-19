@@ -51,6 +51,7 @@ void closeProgramSignal() {
 void closeProgram() {
     freeMemory();
     closeFds();
+    printToConsole("Closing HAL 9000, thank you for using Bowman\n");
     exit(0);
 }
 
@@ -155,6 +156,7 @@ void commandInterpreter() {
                         command = NULL;
                     } else {
                         printError("Error: Missing arguments\n");
+                        printToConsole("Bowman $ ");
                         free(command);
                         command = NULL;
                     }
@@ -170,6 +172,7 @@ void commandInterpreter() {
                         command = NULL;
                     } else {
                         printError("Error: Missing arguments\n");
+                        printToConsole("Bowman $ ");
                         free(command);
                         command = NULL;
                     }
@@ -181,6 +184,7 @@ void commandInterpreter() {
                         command = NULL;
                     } else {
                         printError("Error: Missing arguments\n");
+                        printToConsole("Bowman $ ");
                         free(command);
                         command = NULL;
                     }
@@ -192,11 +196,13 @@ void commandInterpreter() {
                         command = NULL;
                     } else {
                         printError("Error: Missing arguments\n");
+                        printToConsole("Bowman $ ");
                         free(command);
                         command = NULL;
                     }
                 } else {
                     printError("ERROR: Please input a valid command.\n");
+                    printToConsole("Bowman $ ");
                     free(command);
                     command = NULL;
                 }
@@ -221,7 +227,12 @@ int main(int argc, char* argv[]) {
     signal(SIGINT, closeProgramSignal);
 
     saveBowman(argv[1]);
-    phaseOneTesting();
+    
+    char *b;
+    asprintf(&b, "%s user initialized\n", bowman.username);
+    printToConsole(b);
+    free(b);
+    //phaseOneTesting();
 
     commandInterpreter();
 

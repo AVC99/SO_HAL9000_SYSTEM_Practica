@@ -1,5 +1,6 @@
-#include "io_utils.h"
 #include "network_utils.h"
+
+#include "io_utils.h"
 #include "struct_definitions.h"
 
 // arnau.vives joan.medina I3_6
@@ -59,7 +60,7 @@ int sendSocketFile(int socketFD, SocketMessage message, int dataLength) {
     size_t start_j = dataLength_ + start_i;
     for (size_t j = 0; j < 256 - start_j; j++) {
         buffer[j + start_j] = '\0';
-        //printToConsole("I ADDED PADDING\n");
+        // printToConsole("I ADDED PADDING\n");
     }
 
     ssize_t bytesWritten = write(socketFD, buffer, 256);
@@ -77,11 +78,13 @@ int sendSocketFile(int socketFD, SocketMessage message, int dataLength) {
  * @param port The port of the server
  * @return The socket file descriptor
  */
-int createAndConnectSocket(char *IP, int port) {
+int createAndConnectSocket(char *IP, int port, int isVerbose) {
     char *buffer;
-    asprintf(&buffer, "Creating and connecting socket on %s:%d\n", IP, port);
-    printToConsole(buffer);
-    free(buffer);
+    if (isVerbose == TRUE) {
+        asprintf(&buffer, "Creating and connecting socket on %s:%d\n", IP, port);
+        printToConsole(buffer);
+        free(buffer);
+    }
 
     int socketFD;
     struct sockaddr_in server;
@@ -97,9 +100,11 @@ int createAndConnectSocket(char *IP, int port) {
 
     // Check if the IP is valid and if it failed to convert, check why
     if (inet_pton(AF_INET, IP, &server.sin_addr) <= 0) {
-        asprintf(&buffer, "IP address: %s\n", IP);
-        printToConsole(buffer);
-        free(buffer);
+        if (isVerbose == TRUE) {
+            asprintf(&buffer, "IP address: %s\n", IP);
+            printToConsole(buffer);
+            free(buffer);
+        }
 
         if (inet_pton(AF_INET, IP, &server.sin_addr) == 0) {
             printError("inet_pton() failed: invalid address string\n");
@@ -175,7 +180,7 @@ int createAndListenSocket(char *IP, int port) {
 }
 
 SocketMessage getSocketMessage(int clientFD) {
-    //char *buffer;
+    // char *buffer;
     SocketMessage message;
     ssize_t numBytes;
     message.type = 0;
@@ -188,9 +193,9 @@ SocketMessage getSocketMessage(int clientFD) {
     if (numBytes < 1) {
         printError("Error reading the type\n");
     }
-    //asprintf(&buffer, "Type: 0x%02x\n", type);
-    //printToConsole(buffer);
-    //free(buffer);
+    // asprintf(&buffer, "Type: 0x%02x\n", type);
+    // printToConsole(buffer);
+    // free(buffer);
     message.type = type;
 
     // get the header length
@@ -199,26 +204,25 @@ SocketMessage getSocketMessage(int clientFD) {
     if (numBytes < (ssize_t)sizeof(unsigned short)) {
         printError("Error reading the header length\n");
     }
-    //asprintf(&buffer, "Header length: %u\n", headerLength);
-    //printToConsole(buffer);
-    //free(buffer);
+    // asprintf(&buffer, "Header length: %u\n", headerLength);
+    // printToConsole(buffer);
+    // free(buffer);
     message.headerLength = headerLength;
 
     // get the header
     char *header = malloc(sizeof(char) * headerLength + 1);
     numBytes = read(clientFD, header, headerLength);
-    if(header == NULL){
+    if (header == NULL) {
         printError("Error reading the header\n");
-        
     }
     if (numBytes < headerLength) {
         printError("Error reading the header\n");
         free(header);
     }
     header[headerLength] = '\0';
-    //asprintf(&buffer, "Header: %s\n", header);
-    //printToConsole(buffer);
-    //free(buffer);
+    // asprintf(&buffer, "Header: %s\n", header);
+    // printToConsole(buffer);
+    // free(buffer);
     message.header = strdup(header);
     free(header);
 
@@ -229,16 +233,16 @@ SocketMessage getSocketMessage(int clientFD) {
     if (numBytes < 256 - 3 - headerLength) {
         printError("Error reading the data\n");
         free(data);
-    }else{
-        message.data = malloc(sizeof(char) * numBytes );
+    } else {
+        message.data = malloc(sizeof(char) * numBytes);
         memcpy(message.data, data, numBytes);
     }
     /*asprintf(&buffer, "Data: %s\n", data);
     printToConsole(buffer);
     free(buffer);*/
 
-    //message.data = strdup(data);
-    
+    // message.data = strdup(data);
+
     free(data);
 
     return message;

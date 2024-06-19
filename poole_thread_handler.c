@@ -150,10 +150,7 @@ void listPlaylists(int bowmanSocket) {
             numBuffers++;  // add one extra buffer for the remaining bytes
         }
 
-        char *printBuffer;
-        asprintf(&printBuffer, "Pipebuffer : %s\n", pipeBuffer);
-        printToConsole(printBuffer);
-        free(printBuffer);
+    
 
         const char *folderPath = (poole.folder[0] == '/') ? (poole.folder + 1) : poole.folder;
 
@@ -163,21 +160,16 @@ void listPlaylists(int bowmanSocket) {
         }
 
         char *fileName = strtok(pipeBuffer, "\n");
-        asprintf(&printBuffer, "Filename: %s", fileName);
-        printToConsole(printBuffer);
-        free(printBuffer);
-
+        
         size_t dataLength = 0;
         // FIRST BUFFER HAS F AND THE NUMBER OF BUFFERS
         // THE REST OF THE BUFFERS HAVE C AND THE NUMBER OF THE BUFFER
         char *numBuffersString;
         asprintf(&numBuffersString, "%d", numBuffers);
-        strcat(data, "F");
-        dataLength += strlen("F");
         strcat(data, numBuffersString);
         dataLength += strlen(numBuffersString);
-        strcat(data, "&");
-        dataLength += strlen("&");
+        strcat(data, "#");
+        dataLength += strlen("#");
         free(numBuffersString);
         numBuffersString = NULL;
 
@@ -211,7 +203,6 @@ void listPlaylists(int bowmanSocket) {
                 }
             }
             close(playlistfd);
-            strcat(data, "#");
 
             if (dataLength + 1 > remainingBufferSize) {  // +2 for the & and #
                 m.data = strdup(data);
@@ -453,7 +444,7 @@ void *downloadSong(void *arg) {
 int sendExitBowman(char *data) {
     printToConsole("Sending exit Bowman to Discovery\n");
     int discoverySFD;
-    if ((discoverySFD = createAndConnectSocket(poole.discoveryIP, poole.discoveryPort)) < 0) {
+    if ((discoverySFD = createAndConnectSocket(poole.discoveryIP, poole.discoveryPort, TRUE)) < 0) {
         printError("Error connecting to Discovery\n");
         return -1;
     }
@@ -473,7 +464,7 @@ int sendExitBowman(char *data) {
     SocketMessage response = getSocketMessage(discoverySFD);
     if (strcmp(response.header, "CON_OK") == 0) {
         printToConsole("Received CON_OK from Discovery\n");
-        
+
         close(discoverySFD);
         free(response.header);
         free(response.data);
