@@ -14,7 +14,7 @@
 #include "network_utils.h"
 #include "struct_definitions.h"
 
-// arnau.vives joan.medina I3_6
+// arnau.vives  I3_6
 
 extern Bowman bowman;
 

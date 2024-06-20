@@ -12,6 +12,8 @@
 #include "network_utils.h"
 #include "struct_definitions.h"
 
+// arnau.vives I3_6
+
 int terminate = FALSE;
 int inputFileFd, listenBowmanFD, listenPooleFD, numPooles = 0;
 Discovery discovery;

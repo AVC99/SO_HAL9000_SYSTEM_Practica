@@ -11,6 +11,8 @@
 #include <time.h>
 #include <unistd.h>
 
+// arnau.vives I3_6
+
 void printToConsole(char *x);
 void printError(char *x);
 char *readUntil(char del, int fd);

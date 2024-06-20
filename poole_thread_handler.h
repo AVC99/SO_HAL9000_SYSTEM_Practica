@@ -12,6 +12,8 @@
 #include "struct_definitions.h"
 #include "semaphore_v2.h"
 
+// arnau.vives  I3_6
+
 extern pthread_mutex_t isPooleConnectedMutex, pipeMutex;
 extern int terminate;
 extern Poole poole;

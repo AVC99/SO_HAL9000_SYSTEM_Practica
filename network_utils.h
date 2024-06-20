@@ -9,6 +9,8 @@
 #include "io_utils.h"
 #include "struct_definitions.h"
 
+// arnau.vives I3_6
+
 void sendSocketMessage(int socketFD, SocketMessage message);
 SocketMessage getSocketMessage(int clientFD);
 int createAndListenSocket(char *IP, int port);

@@ -3,7 +3,8 @@
 #include "io_utils.h"
 #include "struct_definitions.h"
 
-// arnau.vives joan.medina I3_6
+// arnau.vives I3_6
+
 /**
  * @brief Sends a message through a socket this does not work with sending files
  * @param socketFD The socket file descriptor

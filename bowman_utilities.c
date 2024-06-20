@@ -21,6 +21,8 @@
 #include "network_utils.h"
 #include "struct_definitions.h"
 
+// I3_G6 arnau.vives
+
 extern Bowman bowman;
 int discoverySocketFD, pooleSocketFD, isPooleConnected = FALSE;
 pthread_mutex_t isPooleConnectedMutex;

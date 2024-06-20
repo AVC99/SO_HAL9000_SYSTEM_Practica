@@ -14,6 +14,8 @@
 #include "struct_definitions.h"
 #define MAX_THREADS 50
 
+// arnau.vives I3_6
+
 int terminate = FALSE, endMonolith = FALSE;
 int inputFileFd, discoverySocketFD, bowmanSocketFD, numThreads = 0, bowmanSockets[MAX_THREADS];
 Poole poole;

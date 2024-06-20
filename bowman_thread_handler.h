@@ -14,6 +14,8 @@
 #include "network_utils.h"
 #include "struct_definitions.h"
 
+// arnau.vives  I3_6
+
 extern Bowman bowman;
 extern int pooleSocketFD, isPooleConnected;
 
