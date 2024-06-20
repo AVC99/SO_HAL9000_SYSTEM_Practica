@@ -64,6 +64,9 @@ void printBowmanCmd() {
     printToConsole("Bowman $ ");
     pthread_mutex_unlock(&consoleMutex);
 }
+/**
+ * @brief Prints the playlists in the Poole server
+ */
 void printPlaylists(char* buffer) {
     char* playlistToken;
     char* rest = buffer;
@@ -112,7 +115,8 @@ void listPlaylists_BH(SocketMessage response) {
     free(dataCopy);
 }
 /**
- *
+ *@brief Handles the download of a file from the Poole server in a separate thread receiving the data from the message queue
+ *@param arg the data received from the Poole server (NEW_FILE)
  */
 void* downloadThreadHandler(void* arg) {
     char* data = (char*)arg;

@@ -182,7 +182,9 @@ void connectToDiscovery(int isExit) {
 
     close(discoverySocketFD);
 }
-
+/**
+ * @brief Notifies the bowmans that the program is exiting
+ */
 void notifyBowmans() {
     for (int i = 0; i < numThreads; i++) {
         SocketMessage m;
@@ -203,7 +205,6 @@ void notifyBowmans() {
  * @brief Closes the program correctly cleaning the memory and closing the file descriptors
  */
 void closeProgram() {
-    // TODO: close threads using pthread_cancel
     pthread_mutex_lock(&terminateMutex);
     terminate = TRUE;
     pthread_mutex_unlock(&terminateMutex);
@@ -432,7 +433,6 @@ int main(int argc, char *argv[]) {
 
     savePoole(argv[1]);
     phaseOneTesting();
-    // TODO : CREATE MONOLIT (FORK) PHASE 4
     startMonolith();
 
     // connect to Discovery

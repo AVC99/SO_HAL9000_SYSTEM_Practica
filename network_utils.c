@@ -40,6 +40,7 @@ void sendSocketMessage(int socketFD, SocketMessage message) {
  * @param socketFD The socket file descriptor
  * @param message The message to send
  * @param dataLength The length of the data
+ * @returns TRUE if the file was sent, FALSE otherwise
  */
 int sendSocketFile(int socketFD, SocketMessage message, int dataLength) {
     char *buffer = malloc(sizeof(char) * 256);
@@ -127,6 +128,7 @@ int createAndConnectSocket(char *IP, int port, int isVerbose) {
  * @brief Creates a socket and listens to it
  * @param IP The IP address of the server
  * @param port The port of the server
+ * @return The socket file descriptor
  */
 int createAndListenSocket(char *IP, int port) {
     char *buffer;
@@ -178,7 +180,11 @@ int createAndListenSocket(char *IP, int port) {
 
     return socketFD;
 }
-
+/**
+ * @brief Gets a message from a socket
+ * @param clientFD The socket file descriptor
+ * @return The message
+ */
 SocketMessage getSocketMessage(int clientFD) {
     // char *buffer;
     SocketMessage message;

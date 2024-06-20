@@ -74,7 +74,9 @@ void closeProgram() {
     closeFds();
     exit(0);
 }
-
+/**
+ * @brief Prints the information of the Discovery struct needed for phase 1 testing
+ */
 void phaseOneTesting() {
     char *buffer;
     printToConsole("Discovery information:\n");
@@ -91,7 +93,10 @@ void phaseOneTesting() {
     printToConsole(buffer);
     free(buffer);
 }
-
+/**
+ * @brief Saves the information of the Discovery file into the Discovery struct
+ *  @param filename The name of the file to read
+ */
 void saveDiscovery(char *filename) {
     inputFileFd = open(filename, O_RDONLY);
     if (inputFileFd < 0) {
@@ -410,6 +415,7 @@ void *listenToPoole() {
 
 /**
  * @brief Main function
+ * @returns 0 if the program ends correctly
  */
 int main(int argc, char *argv[]) {
     signal(SIGINT, closeProgram);

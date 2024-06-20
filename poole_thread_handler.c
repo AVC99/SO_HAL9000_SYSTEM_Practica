@@ -56,7 +56,7 @@ void listSongs(int bowmanSocket) {
         //* PARENT
         close(fd[1]);
 
-        // FIXME: IDK WHAT NUMBER TO PUT IN  THE BUFFER SIZE
+        //!IDK WHAT NUMBER TO PUT IN  THE BUFFER SIZE
         char *pipeBuffer = malloc(1000 * sizeof(char));
         ssize_t bytesRead = read(fd[0], pipeBuffer, 1000);
 
@@ -254,6 +254,12 @@ void listPlaylists(int bowmanSocket) {
         exit(1);
     }
 }
+
+/**
+ * @brief Sends an error message to the Bowman
+ * @param bowmanSocket The socket of the Bowman
+ * @returns TRUE if the message was sent successfully, FALSE otherwise
+ */
 int sendFile(char *fileName, int bowmanSocket, int ID) {
     char *songPath;
     char *folderPath = (poole.folder[0] == '/') ? (poole.folder + 1) : poole.folder;
@@ -352,6 +358,7 @@ int sendFile(char *fileName, int bowmanSocket, int ID) {
  * @brief Sends the the filename, the file size, the MD5 hash and an id to Bowman
  * @param songName The name of the song
  * @param bowmanSocket The socket of the Bowman
+ * @returns The random id sent to Bowman or -1 if an error occurred
  */
 int sendFileInfo(char *songName, int bowmanSocket) {
     struct stat st;
@@ -440,7 +447,11 @@ void *downloadSong(void *arg) {
     free(args);
     return NULL;
 }
-
+/**
+ * @brief Sends that a Bowman is exiting to Discovery and then back OK or KO to Bowman if Discovery has been able to remove the Bowman
+ * @param data The data to send to Discovery (Bowman username)
+ * @returns TRUE if the Bowman was removed from Discovery, FALSE otherwise
+ */
 int sendExitBowman(char *data) {
     printToConsole("Sending exit Bowman to Discovery\n");
     int discoverySFD;
@@ -478,7 +489,11 @@ int sendExitBowman(char *data) {
         return FALSE;
     }
 }
-
+/**
+ * @brief Gets the file descriptor of the playlist
+ * @param playlistName The name of the playlist
+ * @returns The file descriptor of the playlist or -1 if an error occurred
+ */
 int getPlaylistFD(char *playlistName) {
     char *folderPath = (poole.folder[0] == '/') ? (poole.folder + 1) : poole.folder;
     char *playlistPath;
@@ -499,6 +514,7 @@ int getPlaylistFD(char *playlistName) {
  * @brief Processes the message received from the Bowman and returns if the thread should terminate
  * @param message The message received from the Bowman
  * @param bowmanSocket The socket of the Bowman
+ * @returns TRUE if the thread should terminate, FALSE otherwise
  */
 int processBowmanMessage(SocketMessage message, int bowmanSocket) {
     printToConsole("Processing message from Bowman\n");

@@ -20,6 +20,9 @@ extern ChunkInfo* chunkInfo;
 pthread_t listenThread;
 extern pthread_mutex_t isPooleConnectedMutex;
 
+/**
+ * @brief Free the memory allocated 
+ */
 void freeMemory() {
     free(bowman.username);
     free(bowman.folder);
@@ -29,7 +32,9 @@ void freeMemory() {
         free(command);
     }
 }
-
+/**
+ * @brief Close the file descriptors if they are open
+ */
 void closeFds() {
     if (inputFileFd != 0) {
         close(inputFileFd);
@@ -41,20 +46,28 @@ void closeFds() {
         close(pooleSocketFD);
     }
 }
+/**
+ * @brief Close the program cleanly if it comes from SIGINT
+ */
 void closeProgramSignal() {
     logout();
     freeMemory();
     closeFds();
     exit(0);
 }
-
+/**
+ * @brief Close the program cleanly
+ */
 void closeProgram() {
     freeMemory();
     closeFds();
     printToConsole("Closing HAL 9000, thank you for using Bowman\n");
     exit(0);
 }
-
+/**
+ * @brief Save the bowman information
+ * @param filename the file to read the information from
+ */
 void saveBowman(char* filename) {
     inputFileFd = open(filename, O_RDONLY);
     if (inputFileFd < 0) {
@@ -86,7 +99,9 @@ void saveBowman(char* filename) {
     bowman.port = atoi(port);
     free(port);
 }
-
+/**
+ * @brief Print the bowman information needed for phase 1 testing
+ */
 void phaseOneTesting() {
     printToConsole("File read correctly\n");
     char* buffer;
@@ -105,7 +120,7 @@ void phaseOneTesting() {
 }
 
 /**
- * Reads the commands from the user and executes them until LOGOUT is called
+ * @brief Reads the commands from the user and executes them until LOGOUT is called
  */
 void commandInterpreter() {
     int bytesRead;
